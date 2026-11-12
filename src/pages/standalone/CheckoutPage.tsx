@@ -6,9 +6,9 @@ import { StandaloneHeader } from '../../components/ui/StandaloneHeader';
 import { PAYMENT_CHANNELS } from '../../data/constants';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import {
+  AulaaPaymentMethod,
   BookingDraft,
   GuestInformation,
-  PaywuzPaymentMethod,
   PricingBreakdown,
   ToastMessage,
   TravelPackage
@@ -28,14 +28,12 @@ export interface CheckoutPageProps {
   sameWhatsappAsPhone: boolean;
   contactIsMainTraveler: boolean;
   selectedPaymentId: string;
-  selectedPaywuzBank: string;
-  selectedPaywuzRetailer: 'ALFAMART' | 'INDOMARET' | '';
-  paywuzMethods: PaywuzPaymentMethod[];
-  paywuzMethodsLoading: boolean;
-  paywuzMethodsError: string;
-  onRetryPaywuzMethods: () => void;
-  onSelectPaywuzBank: (bank: string) => void;
-  onSelectPaywuzRetailer: (retailer: 'ALFAMART' | 'INDOMARET' | '') => void;
+  selectedAulaaMethodCode: string;
+  aulaaMethods: AulaaPaymentMethod[];
+  aulaaMethodsLoading: boolean;
+  aulaaMethodsError: string;
+  onRetryAulaaMethods: () => void;
+  onSelectAulaaMethodCode: (code: string) => void;
   agreedTerms: boolean;
   formErrors: Record<string, string>;
   isSubmittingBooking: boolean;
@@ -60,14 +58,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   sameWhatsappAsPhone,
   contactIsMainTraveler,
   selectedPaymentId,
-  selectedPaywuzBank,
-  selectedPaywuzRetailer,
-  paywuzMethods,
-  paywuzMethodsLoading,
-  paywuzMethodsError,
-  onRetryPaywuzMethods,
-  onSelectPaywuzBank,
-  onSelectPaywuzRetailer,
+  selectedAulaaMethodCode,
+  aulaaMethods,
+  aulaaMethodsLoading,
+  aulaaMethodsError,
+  onRetryAulaaMethods,
+  onSelectAulaaMethodCode,
   agreedTerms,
   formErrors,
   isSubmittingBooking,
@@ -87,10 +83,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const chosenOption = pkg.packageOptions.find((o) => o.id === bookingDraft.optionId) || pkg.packageOptions[0];
   const returnDate = calculateReturnDate(bookingDraft.departureDate, pkg.durationDays);
   const supabaseReady = isSupabaseConfigured();
-
-  const vaChannels = paywuzMethods.filter((m) => m.type === 'virtual_account');
-  const qrisChannel = paywuzMethods.find((m) => m.type === 'qris');
-  const retailChannels = paywuzMethods.filter((m) => m.type === 'retail');
+  const totalAmount = Math.round(activePricing.totalAmount);
 
   return (
     <div className="app-shell">
@@ -384,61 +377,55 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
             <div>
               <h2 className="text-sm font-bold text-slate-900">Metode & Penyelesaian Pembayaran</h2>
               <p className="text-xs text-slate-500">
-                Pilih pembayaran otomatis Paywuz v2 atau metode verifikasi manual ASRIVA.
+                Gunakan pembayaran otomatis Aulaa sebagai metode utama atau verifikasi manual ASRIVA.
               </p>
             </div>
             {supabaseReady && (
               <button
                 type="button"
-                disabled={paywuzMethodsLoading}
-                onClick={onRetryPaywuzMethods}
+                disabled={aulaaMethodsLoading}
+                onClick={onRetryAulaaMethods}
                 className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-bold text-[#136F99] hover:bg-slate-50"
               >
-                <RefreshCw className={`w-3 h-3 ${paywuzMethodsLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3 h-3 ${aulaaMethodsLoading ? 'animate-spin' : ''}`} />
                 <span>Muat Channel</span>
               </button>
             )}
           </div>
 
           {!supabaseReady && (
-            <AlertBanner type="warning" title="Konfigurasi Backend Supabase Diperlukan untuk Paywuz v2">
+            <AlertBanner type="warning" title="Konfigurasi Backend Supabase Diperlukan untuk Aulaa">
               Atur <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>, serta secret{' '}
-              <code>PAYWUZ_API_KEY</code> pada Supabase Edge Functions untuk mengaktifkan transaksi Paywuz v2.
+              <code>AULAA_API_KEY</code> &amp; <code>AULAA_WEBHOOK_SECRET</code> pada Supabase Edge Functions untuk
+              mengaktifkan pembayaran otomatis Aulaa.
             </AlertBanner>
           )}
 
-          {supabaseReady && paywuzMethodsError && (
-            <AlertBanner type="error" title="Gagal Memuat Channel Paywuz v2">
-              {paywuzMethodsError}
+          {supabaseReady && aulaaMethodsError && (
+            <AlertBanner type="error" title="Gagal Memuat Channel Aulaa">
+              {aulaaMethodsError}
             </AlertBanner>
           )}
 
           <div className="space-y-2.5">
             {PAYMENT_CHANNELS.map((channel) => {
-              const isPaywuz = channel.type === 'paywuz_v2';
+              const isAulaa = channel.type === 'aulaa_hosted' || channel.type === 'aulaa_direct';
               const isSelected = selectedPaymentId === channel.id;
 
               let channelAvailableForAmount = channel.available;
               let limitNote = '';
-              if (isPaywuz && !supabaseReady) {
+              if (isAulaa && !supabaseReady) {
                 channelAvailableForAmount = false;
-              } else if (isPaywuz && paywuzMethods.length > 0) {
-                if (channel.id === 'paywuz_qris' && qrisChannel) {
-                  channelAvailableForAmount = qrisChannel.available !== false;
-                  if (!channelAvailableForAmount) {
-                    limitNote = `Batas nominal QRIS: ${formatIDR(qrisChannel.limits.min)} – ${formatIDR(qrisChannel.limits.max)}`;
-                  } else if (qrisChannel.fee.amount !== null) {
-                    limitNote = `Biaya Paywuz QRIS: ${formatIDR(qrisChannel.fee.amount)}`;
-                  }
-                } else if (channel.id === 'paywuz_retail') {
-                  const anyRetailAvailable = retailChannels.some((r) => r.available !== false);
-                  channelAvailableForAmount = retailChannels.length === 0 ? false : anyRetailAvailable;
-                  if (!anyRetailAvailable && retailChannels[0]) {
-                    limitNote = `Batas nominal Retail: ${formatIDR(retailChannels[0].limits.min)} – ${formatIDR(retailChannels[0].limits.max)}`;
-                  }
-                } else if (channel.id === 'paywuz_va' && vaChannels.length > 0) {
-                  const anyVaAvailable = vaChannels.some((v) => v.available !== false);
-                  channelAvailableForAmount = anyVaAvailable;
+              } else if (channel.type === 'aulaa_direct' && aulaaMethods.length > 0) {
+                const anyEligible = aulaaMethods.some(
+                  (m) =>
+                    m.isAvailable &&
+                    totalAmount >= m.minAmount &&
+                    (m.maxAmount === 0 || totalAmount <= m.maxAmount)
+                );
+                if (!anyEligible) {
+                  channelAvailableForAmount = false;
+                  limitNote = 'Tidak ada channel langsung Aulaa yang sesuai untuk nominal tagihan ini.';
                 }
               }
 
@@ -448,8 +435,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   onClick={() => {
                     if (!channelAvailableForAmount) {
                       onShowToast(
-                        !supabaseReady && isPaywuz
-                          ? 'Konfigurasi Supabase diperlukan untuk menjalankan Edge Function Paywuz v2.'
+                        !supabaseReady && isAulaa
+                          ? 'Konfigurasi Supabase diperlukan untuk menjalankan Edge Function Aulaa.'
                           : limitNote || 'Channel pembayaran tidak tersedia untuk nominal ini.',
                         'warning'
                       );
@@ -483,12 +470,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                       variant={
                         !channelAvailableForAmount
                           ? 'neutral'
-                          : isPaywuz
+                          : isAulaa
                           ? 'ocean'
                           : 'warning'
                       }
                     >
-                      {!supabaseReady && isPaywuz ? 'Butuh Supabase' : channel.statusLabel}
+                      {!supabaseReady && isAulaa ? 'Butuh Supabase' : channel.statusLabel}
                     </Badge>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed pl-6">{channel.description}</p>
@@ -496,73 +483,70 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     <p className="text-[10px] font-semibold text-[#136F99] pl-6 mt-1">{limitNote}</p>
                   )}
 
-                  {/* Bank selector when Paywuz Virtual Account is selected */}
-                  {isSelected && channel.id === 'paywuz_va' && channelAvailableForAmount && (
+                  {/* Direct channel selector when Aulaa Direct is selected */}
+                  {isSelected && channel.type === 'aulaa_direct' && channelAvailableForAmount && (
                     <div
                       className="mt-2.5 ml-6 p-2.5 rounded-xl bg-white border border-slate-200 space-y-2"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <label className="block text-[11px] font-bold text-slate-700">
-                        Pilih Bank Virtual Account (opsional)
+                        Pilih Metode Pembayaran Aulaa <span className="text-rose-500">*</span>
                       </label>
-                      <select
-                        value={selectedPaywuzBank}
-                        onChange={(e) => onSelectPaywuzBank(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-900 bg-white focus:outline-none focus:border-[#136F99]"
-                      >
-                        <option value="">Pilih bank nanti di halaman pembayaran Paywuz</option>
-                        {vaChannels.map((va) => (
-                          <option key={va.code} value={va.code} disabled={va.available === false}>
-                            {va.name} ({va.code})
-                            {va.fee.amount !== null ? ` • Biaya ${formatIDR(va.fee.amount)}` : ''}
-                            {va.available === false ? ' (Di luar limit)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Retailer selector when Paywuz Retail is selected */}
-                  {isSelected && channel.id === 'paywuz_retail' && channelAvailableForAmount && (
-                    <div
-                      className="mt-2.5 ml-6 p-2.5 rounded-xl bg-white border border-slate-200 space-y-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Pilih Gerai Retail <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(['ALFAMART', 'INDOMARET'] as const).map((code) => {
-                          const apiItem = retailChannels.find((r) => r.code === code);
-                          const disabled = apiItem ? apiItem.available === false : false;
-                          const active = selectedPaywuzRetailer === code;
-                          return (
-                            <button
-                              key={code}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => {
-                                onSelectPaywuzRetailer(code);
-                                if (formErrors.paymentMethod) onClearFieldError('paymentMethod');
-                              }}
-                              className={`p-2 rounded-lg border text-left text-xs font-bold transition ${
-                                disabled
-                                  ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
-                                  : active
-                                  ? 'border-[#136F99] bg-[#E7F3F8] text-[#0B2545]'
-                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <div>{apiItem?.name || code}</div>
-                              {apiItem?.fee.amount !== null && apiItem?.fee.amount !== undefined && (
-                                <div className="text-[10px] font-normal text-slate-500">
-                                  Biaya {formatIDR(apiItem.fee.amount)}
+                      {aulaaMethodsLoading ? (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 py-1">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#136F99]" />
+                          <span>Memuat metode aktif dari Aulaa...</span>
+                        </div>
+                      ) : aulaaMethods.length === 0 ? (
+                        <div className="text-[11px] text-slate-500">
+                          Daftar channel belum termuat. Gunakan opsi <strong>Aulaa — Semua Metode</strong> atau tekan Muat Channel.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {aulaaMethods.map((m) => {
+                            const withinMin = totalAmount >= m.minAmount;
+                            const withinMax = m.maxAmount === 0 || totalAmount <= m.maxAmount;
+                            const disabled = !m.isAvailable || !withinMin || !withinMax;
+                            const active = selectedAulaaMethodCode === m.code;
+                            return (
+                              <button
+                                key={m.code}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  onSelectAulaaMethodCode(m.code);
+                                  if (formErrors.paymentMethod) onClearFieldError('paymentMethod');
+                                }}
+                                className={`p-2.5 rounded-lg border text-left transition flex items-center justify-between gap-2 ${
+                                  disabled
+                                    ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                    : active
+                                    ? 'border-[#136F99] bg-[#E7F3F8] text-[#0B2545]'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold truncate">{m.name}</div>
+                                  <div className="text-[10px] text-slate-500">
+                                    Kode: <span className="font-mono">{m.code}</span>
+                                    {m.minAmount > 0 ? ` • Min ${formatIDR(m.minAmount)}` : ''}
+                                    {m.maxAmount > 0 ? ` • Maks ${formatIDR(m.maxAmount)}` : ' • Tanpa batas maks'}
+                                  </div>
                                 </div>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+                                <Badge variant={disabled ? 'neutral' : active ? 'ocean' : 'success'}>
+                                  {!m.isAvailable
+                                    ? 'Nonaktif'
+                                    : !withinMin || !withinMax
+                                    ? 'Di luar limit'
+                                    : active
+                                    ? 'Dipilih'
+                                    : 'Aktif'}
+                                </Badge>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const PAYWUZ_API_BASE = 'https://api.paywuz.id/v2';
+const AULAA_API_BASE = 'https://api.aulaa.co/v1';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +8,7 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
 
-type PaywuzStatus = 'pending' | 'settlement' | 'success' | 'failed' | 'cancelled';
+type AulaaStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -20,10 +20,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function getPaywuzApiKey(): string {
-  const apiKey = Deno.env.get('PAYWUZ_API_KEY')?.trim();
+function getAulaaApiKey(): string {
+  const apiKey = Deno.env.get('AULAA_API_KEY')?.trim();
   if (!apiKey) {
-    throw new Error('PAYWUZ_API_KEY belum dikonfigurasi pada Supabase Edge Function Secrets.');
+    throw new Error('AULAA_API_KEY belum dikonfigurasi pada Supabase Edge Function Secrets.');
   }
   return apiKey;
 }
@@ -39,29 +39,23 @@ function getSupabaseAdmin() {
   });
 }
 
-function mapPaywuzStatusToBookingState(status: PaywuzStatus): {
+function mapAulaaStatusToBookingState(status: AulaaStatus): {
   trip_category: 'upcoming' | 'cancelled';
   booking_status: string;
   payment_status: string;
 } {
   switch (status) {
-    case 'settlement':
-      return {
-        trip_category: 'upcoming',
-        booking_status: 'Terkonfirmasi - Menunggu Settlement',
-        payment_status: 'Settlement (Menunggu Dana Masuk)'
-      };
-    case 'success':
+    case 'paid':
       return {
         trip_category: 'upcoming',
         booking_status: 'Terkonfirmasi - Lunas',
         payment_status: 'Lunas (Terverifikasi)'
       };
-    case 'failed':
+    case 'expired':
       return {
-        trip_category: 'upcoming',
-        booking_status: 'Menunggu Pembayaran (Paywuz)',
-        payment_status: 'Pembayaran Gagal'
+        trip_category: 'cancelled',
+        booking_status: 'Kadaluarsa',
+        payment_status: 'Kadaluarsa (Melewati Batas Waktu)'
       };
     case 'cancelled':
       return {
@@ -69,17 +63,23 @@ function mapPaywuzStatusToBookingState(status: PaywuzStatus): {
         booking_status: 'Dibatalkan',
         payment_status: 'Dibatalkan'
       };
+    case 'failed':
+      return {
+        trip_category: 'upcoming',
+        booking_status: 'Menunggu Pembayaran (Aulaa)',
+        payment_status: 'Pembayaran Gagal'
+      };
     case 'pending':
     default:
       return {
         trip_category: 'upcoming',
-        booking_status: 'Menunggu Pembayaran (Paywuz)',
+        booking_status: 'Menunggu Pembayaran (Aulaa)',
         payment_status: 'Belum Dibayar - Menunggu Pembayaran'
       };
   }
 }
 
-interface CreateTransactionRequest {
+interface CreatePaymentRequest {
   booking: {
     bookingReference: string;
     packageId: string;
@@ -112,10 +112,10 @@ interface CreateTransactionRequest {
     paymentMethodName: string;
     bookingStatus?: string;
   };
-  paywuz?: {
-    endpointMode: 'va' | 'qris' | 'retail' | 'all';
-    bank?: string;
-    retailer?: 'ALFAMART' | 'INDOMARET';
+  aulaa?: {
+    paymentMethod?: string;
+    paymentMethodName?: string;
+    paymentMethodType?: string;
     redirectUrl?: string;
   };
 }
@@ -130,8 +130,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = (await req.json()) as CreateTransactionRequest;
-    const { booking, paywuz } = body;
+    const body = (await req.json()) as CreatePaymentRequest;
+    const { booking, aulaa } = body;
 
     if (!booking?.bookingReference || !booking.guest?.fullName) {
       return jsonResponse(
@@ -168,8 +168,8 @@ Deno.serve(async (req: Request) => {
       payment_method_id: booking.paymentMethodId,
       payment_method_name: booking.paymentMethodName,
       trip_category: 'upcoming',
-      booking_status: paywuz
-        ? 'Menunggu Pembayaran (Paywuz)'
+      booking_status: aulaa
+        ? 'Menunggu Pembayaran (Aulaa)'
         : booking.bookingStatus || 'Menunggu Verifikasi Pembayaran',
       payment_status: 'Belum Dibayar - Menunggu Pembayaran'
     });
@@ -181,87 +181,93 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!paywuz) {
+    if (!aulaa) {
       return jsonResponse({ bookingReference: booking.bookingReference, transaction: null }, 201);
     }
 
-    const apiKey = getPaywuzApiKey();
-    const endpointMode = paywuz.endpointMode;
-    const endpointPathMap: Record<'va' | 'qris' | 'retail' | 'all', string> = {
-      va: '/transactions/va',
-      qris: '/transactions/qris',
-      retail: '/transactions/retail',
-      all: '/transactions/all'
+    const apiKey = getAulaaApiKey();
+    const aulaaPayload: Record<string, unknown> = {
+      order_id: booking.bookingReference,
+      amount: Math.round(booking.totalAmount)
     };
 
-    const paywuzBody: Record<string, unknown> = {
-      orderId: booking.bookingReference,
-      amount: Math.round(booking.totalAmount),
-      customer: {
-        name: booking.guest.fullName.slice(0, 100),
-        email: booking.guest.email,
-        phone: booking.guest.phone
-      },
-      metadata: {
-        packageId: booking.packageId,
-        departureDate: booking.departureDate
-      }
-    };
-
-    if (paywuz.redirectUrl) {
-      paywuzBody.redirectUrl = paywuz.redirectUrl;
+    if (aulaa.paymentMethod) {
+      aulaaPayload.payment_method = aulaa.paymentMethod;
+    }
+    if (aulaa.redirectUrl) {
+      aulaaPayload.redirect_url = aulaa.redirectUrl;
     }
 
-    if (endpointMode === 'va' && paywuz.bank) {
-      paywuzBody.bank = paywuz.bank;
-    }
-
-    if (endpointMode === 'retail') {
-      paywuzBody.retailer = paywuz.retailer;
-    }
-
-    const upstream = await fetch(`${PAYWUZ_API_BASE}${endpointPathMap[endpointMode]}`, {
+    const upstream = await fetch(`${AULAA_API_BASE}/payments`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(paywuzBody)
+      body: JSON.stringify(aulaaPayload)
     });
 
     const upstreamJson = await upstream.json();
+    const p =
+      upstreamJson?.data && typeof upstreamJson.data === 'object'
+        ? (upstreamJson.data as Record<string, unknown>)
+        : (upstreamJson as Record<string, unknown>);
 
-    if (!upstream.ok || !upstreamJson?.data) {
+    if (!upstream.ok || !p?.id) {
       await supabase.from('bookings').delete().eq('booking_reference', booking.bookingReference);
-      return jsonResponse(upstreamJson, upstream.status);
+      const errMessage =
+        (upstreamJson?.error as { message?: string } | undefined)?.message ||
+        (upstreamJson?.message as string | undefined) ||
+        'Gagal membuat tagihan di Aulaa.';
+      return jsonResponse(
+        {
+          error: {
+            code: (upstreamJson?.error as { code?: string } | undefined)?.code || 'aulaa_error',
+            message: errMessage
+          }
+        },
+        upstream.status >= 400 ? upstream.status : 400
+      );
     }
 
-    const tx = upstreamJson.data;
-    const mappedBookingState = mapPaywuzStatusToBookingState((tx.status as PaywuzStatus) || 'pending');
+    const txId = String(p.id);
+    const txStatus = ((p.status as string) || 'pending') as AulaaStatus;
+    const amount = Number(p.amount ?? Math.round(booking.totalAmount));
+    const feeAmount = Number(p.fee_amount ?? 0);
+    const totalAmount = Number(p.total_amount ?? amount + feeAmount);
+    const paymentLink = String(p.payment_link || `https://payment.aulaa.co/pay/${txId}`);
+    const paymentNumber = p.payment_number ? String(p.payment_number) : null;
+    const paymentMethod = p.payment_method ? String(p.payment_method) : aulaa.paymentMethod ?? null;
+    const paymentMethodName = aulaa.paymentMethodName ?? paymentMethod;
+    const paymentMethodType = aulaa.paymentMethodType ?? null;
+    const currency = String(p.currency || 'IDR');
+    const countryCode = String(p.country_code || 'ID');
+    const expiresAt = (p.expires_at ?? p.expired_at ?? null) as string | null;
+    const paidAt = (p.paid_at ?? null) as string | null;
+    const createdAt = (p.created_at ?? null) as string | null;
 
-    await supabase.from('paywuz_transactions').upsert(
+    const mappedBookingState = mapAulaaStatusToBookingState(txStatus);
+
+    await supabase.from('aulaa_transactions').upsert(
       {
-        id: tx.id,
-        order_id: tx.orderId,
-        status: tx.status,
-        endpoint_mode: endpointMode,
-        method_type: tx.method?.type ?? null,
-        method_code: tx.method?.code ?? null,
-        method_name: tx.method?.name ?? null,
-        amount: tx.amount,
-        fee_amount: tx.fee?.amount ?? 0,
-        fee_paid_by: tx.fee?.paidBy ?? 'customer',
-        total_payment: tx.totalPayment,
-        net_amount: tx.netAmount,
-        payment_url: tx.payment?.url ?? '',
-        va_number: tx.payment?.vaNumber ?? null,
-        qr_string: tx.payment?.qrString ?? null,
-        retail_code: tx.payment?.retailCode ?? null,
-        customer: tx.customer ?? null,
-        metadata: tx.metadata ?? null,
-        expires_at: tx.expiresAt ?? null,
-        paid_at: tx.paidAt ?? null,
-        paywuz_created_at: tx.createdAt ?? null
+        id: txId,
+        order_id: String(p.order_id || booking.bookingReference),
+        status: txStatus,
+        payment_method: paymentMethod,
+        payment_method_name: paymentMethodName,
+        payment_method_type: paymentMethodType,
+        amount,
+        fee_amount: feeAmount,
+        total_amount: totalAmount,
+        payment_link: paymentLink,
+        payment_number: paymentNumber,
+        currency,
+        country_code: countryCode,
+        redirect_url: aulaa.redirectUrl ?? null,
+        expires_at: expiresAt,
+        paid_at: paidAt,
+        aulaa_created_at: createdAt,
+        raw_response: upstreamJson
       },
       { onConflict: 'order_id' }
     );
@@ -278,12 +284,29 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(
       {
         bookingReference: booking.bookingReference,
-        transaction: tx
+        transaction: {
+          id: txId,
+          orderId: String(p.order_id || booking.bookingReference),
+          status: txStatus,
+          paymentMethod,
+          paymentMethodName,
+          paymentMethodType,
+          amount,
+          feeAmount,
+          totalAmount,
+          paymentLink,
+          paymentNumber,
+          currency,
+          countryCode,
+          expiresAt,
+          paidAt,
+          createdAt
+        }
       },
-      upstream.status
+      201
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Gagal membuat transaksi Paywuz v2.';
+    const message = err instanceof Error ? err.message : 'Gagal membuat transaksi Aulaa.';
     return jsonResponse({ error: { code: 'internal_error', message } }, 500);
   }
 });

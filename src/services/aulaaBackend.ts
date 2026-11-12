@@ -1,13 +1,12 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
+  AulaaPaymentMethod,
+  AulaaTransaction,
   Booking,
-  BookingReview,
-  PaywuzEndpointMode,
-  PaywuzPaymentMethod,
-  PaywuzTransaction
+  BookingReview
 } from '../types/travel';
 
-export interface PaywuzApiErrorPayload {
+export interface AulaaApiErrorPayload {
   error?: {
     code?: string;
     message?: string;
@@ -15,26 +14,26 @@ export interface PaywuzApiErrorPayload {
   };
 }
 
-export class PaywuzGatewayException extends Error {
+export class AulaaGatewayException extends Error {
   code: string;
   field?: string;
 
   constructor(message: string, code = 'gateway_error', field?: string) {
     super(message);
-    this.name = 'PaywuzGatewayException';
+    this.name = 'AulaaGatewayException';
     this.code = code;
     this.field = field;
   }
 }
 
-async function extractFunctionError(error: unknown): Promise<PaywuzGatewayException> {
+async function extractFunctionError(error: unknown): Promise<AulaaGatewayException> {
   if (error && typeof error === 'object' && 'context' in error) {
     const context = (error as { context?: Response }).context;
     if (context && typeof context.json === 'function') {
       try {
-        const body = (await context.json()) as PaywuzApiErrorPayload;
+        const body = (await context.json()) as AulaaApiErrorPayload;
         if (body?.error?.message) {
-          return new PaywuzGatewayException(
+          return new AulaaGatewayException(
             body.error.message,
             body.error.code || 'gateway_error',
             body.error.field
@@ -46,54 +45,52 @@ async function extractFunctionError(error: unknown): Promise<PaywuzGatewayExcept
     }
   }
   const msg = error instanceof Error ? error.message : 'Gagal menghubungi layanan Supabase Edge Function.';
-  return new PaywuzGatewayException(msg);
+  return new AulaaGatewayException(msg);
 }
 
-export async function fetchPaywuzPaymentMethods(
-  amount: number
-): Promise<PaywuzPaymentMethod[]> {
+export async function fetchAulaaPaymentMethods(): Promise<AulaaPaymentMethod[]> {
   if (!isSupabaseConfigured() || !supabase) {
-    throw new PaywuzGatewayException(
+    throw new AulaaGatewayException(
       'Konfigurasi Supabase (VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur.',
       'supabase_not_configured'
     );
   }
 
-  const { data, error } = await supabase.functions.invoke('paywuz-payment-methods', {
-    body: { amount: Math.round(amount) }
+  const { data, error } = await supabase.functions.invoke('aulaa-payment-methods', {
+    body: {}
   });
 
   if (error) {
     throw await extractFunctionError(error);
   }
   if (data?.error?.message) {
-    throw new PaywuzGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
+    throw new AulaaGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
   }
 
-  return Array.isArray(data?.data) ? (data.data as PaywuzPaymentMethod[]) : [];
+  return Array.isArray(data?.methods) ? (data.methods as AulaaPaymentMethod[]) : [];
 }
 
-export interface CreatePaywuzBookingParams {
+export interface CreateAulaaBookingParams {
   booking: Booking;
-  paywuz?: {
-    endpointMode: PaywuzEndpointMode;
-    bank?: string;
-    retailer?: 'ALFAMART' | 'INDOMARET';
+  aulaa?: {
+    paymentMethod?: string;
+    paymentMethodName?: string;
+    paymentMethodType?: string;
     redirectUrl?: string;
   };
 }
 
-export async function createBookingWithPaywuz(
-  params: CreatePaywuzBookingParams
-): Promise<{ bookingReference: string; transaction: PaywuzTransaction | null }> {
+export async function createBookingWithAulaa(
+  params: CreateAulaaBookingParams
+): Promise<{ bookingReference: string; transaction: AulaaTransaction | null }> {
   if (!isSupabaseConfigured() || !supabase) {
-    throw new PaywuzGatewayException(
+    throw new AulaaGatewayException(
       'Konfigurasi Supabase (VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur.',
       'supabase_not_configured'
     );
   }
 
-  const { data, error } = await supabase.functions.invoke('paywuz-create-transaction', {
+  const { data, error } = await supabase.functions.invoke('aulaa-create-payment', {
     body: params
   });
 
@@ -101,24 +98,24 @@ export async function createBookingWithPaywuz(
     throw await extractFunctionError(error);
   }
   if (data?.error?.message) {
-    throw new PaywuzGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
+    throw new AulaaGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
   }
 
   return {
     bookingReference: data?.bookingReference || params.booking.bookingReference,
-    transaction: (data?.transaction as PaywuzTransaction | null) ?? null
+    transaction: (data?.transaction as AulaaTransaction | null) ?? null
   };
 }
 
-export async function refreshPaywuzTransactionStatus(orderId: string): Promise<PaywuzTransaction> {
+export async function refreshAulaaPaymentStatus(orderId: string): Promise<AulaaTransaction> {
   if (!isSupabaseConfigured() || !supabase) {
-    throw new PaywuzGatewayException(
+    throw new AulaaGatewayException(
       'Konfigurasi Supabase belum diatur.',
       'supabase_not_configured'
     );
   }
 
-  const { data, error } = await supabase.functions.invoke('paywuz-transaction-status', {
+  const { data, error } = await supabase.functions.invoke('aulaa-payment-status', {
     body: { orderId }
   });
 
@@ -126,23 +123,23 @@ export async function refreshPaywuzTransactionStatus(orderId: string): Promise<P
     throw await extractFunctionError(error);
   }
   if (data?.error?.message) {
-    throw new PaywuzGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
+    throw new AulaaGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
   }
 
-  return data.data as PaywuzTransaction;
+  return data.data as AulaaTransaction;
 }
 
-export async function cancelPaywuzTransaction(
+export async function cancelAulaaPayment(
   orderId: string
-): Promise<{ data: PaywuzTransaction | null; bookingCancelled?: boolean }> {
+): Promise<{ data: AulaaTransaction | null; bookingCancelled?: boolean }> {
   if (!isSupabaseConfigured() || !supabase) {
-    throw new PaywuzGatewayException(
+    throw new AulaaGatewayException(
       'Konfigurasi Supabase belum diatur.',
       'supabase_not_configured'
     );
   }
 
-  const { data, error } = await supabase.functions.invoke('paywuz-cancel-transaction', {
+  const { data, error } = await supabase.functions.invoke('aulaa-cancel-payment', {
     body: { orderId }
   });
 
@@ -150,10 +147,10 @@ export async function cancelPaywuzTransaction(
     throw await extractFunctionError(error);
   }
   if (data?.error?.message) {
-    throw new PaywuzGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
+    throw new AulaaGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
   }
 
-  return data as { data: PaywuzTransaction | null; bookingCancelled?: boolean };
+  return data as { data: AulaaTransaction | null; bookingCancelled?: boolean };
 }
 
 export async function lookupBookingInSupabase(

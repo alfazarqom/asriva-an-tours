@@ -8,16 +8,15 @@ import {
   Loader2,
   QrCode,
   RefreshCw,
-  Store,
   Wallet,
   XCircle
 } from 'lucide-react';
-import { PaywuzTransaction, ToastMessage } from '../types/travel';
+import { AulaaTransaction, ToastMessage } from '../types/travel';
 import { formatIDR } from '../utils/formatters';
 import { Badge } from './ui/Badge';
 
-export interface PaywuzPaymentBoxProps {
-  transaction: PaywuzTransaction;
+export interface AulaaPaymentBoxProps {
+  transaction: AulaaTransaction;
   isCheckingStatus: boolean;
   isCancelling: boolean;
   onRefreshStatus: () => void;
@@ -26,17 +25,23 @@ export interface PaywuzPaymentBoxProps {
 }
 
 const STATUS_DISPLAY: Record<
-  PaywuzTransaction['status'],
+  AulaaTransaction['status'],
   { label: string; variant: 'warning' | 'ocean' | 'success' | 'error' | 'neutral' }
 > = {
   pending: { label: 'Menunggu Pembayaran (pending)', variant: 'warning' },
-  settlement: { label: 'Settlement (Dana Belum Masuk)', variant: 'ocean' },
-  success: { label: 'Berhasil / Lunas (success)', variant: 'success' },
+  paid: { label: 'Berhasil / Lunas (paid)', variant: 'success' },
+  expired: { label: 'Kadaluarsa (expired)', variant: 'error' },
   failed: { label: 'Gagal (failed)', variant: 'error' },
   cancelled: { label: 'Dibatalkan (cancelled)', variant: 'neutral' }
 };
 
-export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
+function isQrPayment(tx: AulaaTransaction): boolean {
+  if (!tx.paymentNumber) return false;
+  if (tx.paymentMethod === 'qris' || tx.paymentMethodType === 'qr_code') return true;
+  return tx.paymentNumber.startsWith('000201');
+}
+
+export const AulaaPaymentBox: React.FC<AulaaPaymentBoxProps> = ({
   transaction,
   isCheckingStatus,
   isCancelling,
@@ -45,16 +50,17 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
   onShowToast
 }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const qrString = transaction.payment.qrString;
+  const showQrCode = isQrPayment(transaction);
+  const qrPayload = showQrCode ? transaction.paymentNumber : null;
 
   useEffect(() => {
     let active = true;
-    if (!qrString) {
+    if (!qrPayload) {
       setQrDataUrl('');
       return;
     }
 
-    QRCode.toDataURL(qrString, {
+    QRCode.toDataURL(qrPayload, {
       width: 220,
       margin: 2,
       color: {
@@ -72,9 +78,9 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
     return () => {
       active = false;
     };
-  }, [qrString]);
+  }, [qrPayload]);
 
-  const statusMeta = STATUS_DISPLAY[transaction.status];
+  const statusMeta = STATUS_DISPLAY[transaction.status] || STATUS_DISPLAY.pending;
   const canCancel = transaction.status === 'pending';
 
   return (
@@ -82,43 +88,19 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wider text-[#136F99]">
-            Pembayaran Paywuz v2
+            Pembayaran Aulaa
           </div>
           <h3 className="text-sm font-bold text-slate-900 mt-0.5">
-            {transaction.method.name || 'Pilih Metode di Halaman Paywuz'}
+            {transaction.paymentMethodName ||
+              transaction.paymentMethod ||
+              'Pilih Metode di Halaman Checkout Aulaa'}
           </h3>
         </div>
         <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
       </div>
 
-      {/* VA Number */}
-      {transaction.payment.vaNumber && (
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase text-slate-400 flex items-center gap-1">
-              <Wallet className="w-3 h-3 text-[#136F99]" />
-              <span>Nomor Virtual Account ({transaction.method.code})</span>
-            </div>
-            <div className="text-base font-extrabold tracking-wider text-[#0B2545] mt-0.5 break-all select-text">
-              {transaction.payment.vaNumber}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard?.writeText(transaction.payment.vaNumber!);
-              onShowToast('Nomor Virtual Account berhasil disalin!', 'success');
-            }}
-            className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 inline-flex items-center gap-1 shrink-0 active:scale-95"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            Salin
-          </button>
-        </div>
-      )}
-
-      {/* QRIS QR Image converted from payment.qrString */}
-      {transaction.payment.qrString && (
+      {/* QRIS QR Code (ketika payment_method dikunci ke QRIS & payment_number tersedia) */}
+      {showQrCode && transaction.paymentNumber && (
         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center space-y-2">
           <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#0B2545]">
             <QrCode className="w-3.5 h-3.5 text-[#136F99]" />
@@ -141,23 +123,26 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
         </div>
       )}
 
-      {/* Retail Code */}
-      {transaction.payment.retailCode && (
+      {/* Non-QR Payment Number (Virtual Account / Kode Pembayaran) */}
+      {!showQrCode && transaction.paymentNumber && (
         <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase text-slate-400 flex items-center gap-1">
-              <Store className="w-3 h-3 text-[#D97706]" />
-              <span>Kode Pembayaran {transaction.method.name || 'Retail'}</span>
+              <Wallet className="w-3 h-3 text-[#136F99]" />
+              <span>
+                Nomor Pembayaran{' '}
+                {transaction.paymentMethod ? `(${transaction.paymentMethod.toUpperCase()})` : ''}
+              </span>
             </div>
             <div className="text-base font-extrabold tracking-wider text-[#0B2545] mt-0.5 break-all select-text">
-              {transaction.payment.retailCode}
+              {transaction.paymentNumber}
             </div>
           </div>
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard?.writeText(transaction.payment.retailCode!);
-              onShowToast('Kode pembayaran retail berhasil disalin!', 'success');
+              navigator.clipboard?.writeText(transaction.paymentNumber!);
+              onShowToast('Nomor pembayaran berhasil disalin!', 'success');
             }}
             className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 inline-flex items-center gap-1 shrink-0 active:scale-95"
           >
@@ -167,21 +152,19 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
         </div>
       )}
 
-      {/* Paywuz Exact Fee & Amount Breakdown */}
+      {/* Aulaa Amount & Fee Breakdown */}
       <div className="rounded-xl bg-slate-50 p-3 space-y-1.5 border border-slate-100">
         <div className="flex justify-between text-slate-600">
           <span>Nominal Tagihan (amount)</span>
           <span className="font-semibold text-slate-900">{formatIDR(transaction.amount)}</span>
         </div>
         <div className="flex justify-between text-slate-600">
-          <span>
-            Biaya Paywuz ({transaction.fee.paidBy === 'customer' ? 'ditanggung pembeli' : 'ditanggung merchant'})
-          </span>
-          <span className="font-semibold text-slate-900">{formatIDR(transaction.fee.amount)}</span>
+          <span>Biaya Transaksi (fee_amount)</span>
+          <span className="font-semibold text-slate-900">{formatIDR(transaction.feeAmount)}</span>
         </div>
         <div className="flex justify-between pt-1.5 border-t border-slate-200/70">
-          <span className="font-bold text-slate-900">Total Dibayar (totalPayment)</span>
-          <span className="font-extrabold text-[#0B2545]">{formatIDR(transaction.totalPayment)}</span>
+          <span className="font-bold text-slate-900">Total Dibayar (total_amount)</span>
+          <span className="font-extrabold text-[#0B2545]">{formatIDR(transaction.totalAmount)}</span>
         </div>
       </div>
 
@@ -201,16 +184,16 @@ export const PaywuzPaymentBox: React.FC<PaywuzPaymentBoxProps> = ({
         <span className="font-mono text-[10px] text-slate-400">ID: {transaction.id.slice(0, 8)}...</span>
       </div>
 
-      {/* Paywuz Hosted Payment Page URL & Status / Cancel Actions */}
+      {/* Hosted Payment Link & Status / Cancel Actions */}
       <div className="space-y-2 pt-1">
-        {transaction.payment.url && transaction.status === 'pending' && (
+        {transaction.paymentLink && transaction.status === 'pending' && (
           <a
-            href={transaction.payment.url}
+            href={transaction.paymentLink}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-2.5 px-4 rounded-xl bg-[#136F99] text-white text-xs font-bold shadow-xs hover:bg-[#0f5c80] transition flex items-center justify-center gap-1.5"
           >
-            <span>Buka Halaman Pembayaran Paywuz</span>
+            <span>Buka Halaman Pembayaran Aulaa</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         )}

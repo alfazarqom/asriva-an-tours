@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const PAYWUZ_API_BASE = 'https://api.paywuz.id/v2';
+const AULAA_API_BASE = 'https://api.aulaa.co/v1';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -18,10 +18,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function getPaywuzApiKey(): string {
-  const apiKey = Deno.env.get('PAYWUZ_API_KEY')?.trim();
+function getAulaaApiKey(): string {
+  const apiKey = Deno.env.get('AULAA_API_KEY')?.trim();
   if (!apiKey) {
-    throw new Error('PAYWUZ_API_KEY belum dikonfigurasi pada Supabase Edge Function Secrets.');
+    throw new Error('AULAA_API_KEY belum dikonfigurasi pada Supabase Edge Function Secrets.');
   }
   return apiKey;
 }
@@ -59,12 +59,12 @@ Deno.serve(async (req: Request) => {
 
     const supabase = getSupabaseAdmin();
     const { data: existingTx } = await supabase
-      .from('paywuz_transactions')
-      .select('order_id')
+      .from('aulaa_transactions')
+      .select('*')
       .eq('order_id', orderId)
       .maybeSingle();
 
-    if (!existingTx) {
+    if (!existingTx?.id) {
       await supabase
         .from('bookings')
         .update({
@@ -77,26 +77,35 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ data: null, bookingCancelled: true }, 200);
     }
 
-    const apiKey = getPaywuzApiKey();
-    const upstream = await fetch(`${PAYWUZ_API_BASE}/transactions/${encodeURIComponent(orderId)}/cancel`, {
+    const apiKey = getAulaaApiKey();
+    const upstream = await fetch(`${AULAA_API_BASE}/payments/${encodeURIComponent(existingTx.id)}/cancel`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`
       }
     });
 
-    const upstreamJson = await upstream.json();
-    if (!upstream.ok || !upstreamJson?.data) {
-      return jsonResponse(upstreamJson, upstream.status);
+    const upstreamJson = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      const errMessage =
+        (upstreamJson?.error as { message?: string } | undefined)?.message ||
+        (upstreamJson?.message as string | undefined) ||
+        'Transaksi tidak dapat dibatalkan (mungkin sudah dibayar atau kadaluarsa).';
+      return jsonResponse({ error: { code: 'aulaa_cancel_failed', message: errMessage } }, upstream.status);
     }
 
-    const tx = upstreamJson.data;
+    const p =
+      upstreamJson?.data && typeof upstreamJson.data === 'object'
+        ? (upstreamJson.data as Record<string, unknown>)
+        : (upstreamJson as Record<string, unknown>);
+
+    const nextStatus = (p?.status as string) || 'cancelled';
 
     await supabase
-      .from('paywuz_transactions')
+      .from('aulaa_transactions')
       .update({
-        status: tx.status,
-        paid_at: tx.paidAt ?? null
+        status: nextStatus,
+        raw_response: upstreamJson
       })
       .eq('order_id', orderId);
 
@@ -109,9 +118,31 @@ Deno.serve(async (req: Request) => {
       })
       .eq('booking_reference', orderId);
 
-    return jsonResponse({ data: tx }, 200);
+    return jsonResponse(
+      {
+        data: {
+          id: existingTx.id,
+          orderId,
+          status: nextStatus,
+          paymentMethod: existingTx.payment_method,
+          paymentMethodName: existingTx.payment_method_name,
+          paymentMethodType: existingTx.payment_method_type,
+          amount: existingTx.amount,
+          feeAmount: existingTx.fee_amount,
+          totalAmount: existingTx.total_amount,
+          paymentLink: existingTx.payment_link,
+          paymentNumber: existingTx.payment_number,
+          currency: existingTx.currency || 'IDR',
+          countryCode: existingTx.country_code || 'ID',
+          expiresAt: existingTx.expires_at ?? null,
+          paidAt: existingTx.paid_at ?? null,
+          createdAt: existingTx.aulaa_created_at ?? null
+        }
+      },
+      200
+    );
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Gagal membatalkan transaksi Paywuz v2.';
+    const message = err instanceof Error ? err.message : 'Gagal membatalkan transaksi Aulaa.';
     return jsonResponse({ error: { code: 'internal_error', message } }, 500);
   }
 });

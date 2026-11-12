@@ -18,39 +18,21 @@ export const PROMO_CODES: Record<string, { label: string; amount: number; minSpe
 
 export const PAYMENT_CHANNELS: PaymentChannelOption[] = [
   {
-    id: 'paywuz_all',
-    name: 'Paywuz — Semua Metode (VA, QRIS, Retail)',
-    type: 'paywuz_v2',
+    id: 'aulaa_all',
+    name: 'Aulaa — Semua Metode (QRIS, Virtual Account, Kartu, E-Wallet)',
+    type: 'aulaa_hosted',
     description:
-      'Lanjutkan ke halaman pembayaran resmi Paywuz untuk memilih Virtual Account, QRIS, atau Gerai Retail yang tersedia.',
-    statusLabel: 'Paywuz v2 • /transactions/all',
+      'Metode pembayaran utama ASRIVA. Anda akan diarahkan ke halaman checkout resmi Aulaa untuk memilih QRIS, Virtual Account, atau metode aktif lainnya.',
+    statusLabel: 'Utama • Aulaa Checkout',
     available: true
   },
   {
-    id: 'paywuz_va',
-    name: 'Paywuz — Virtual Account (VA)',
-    type: 'paywuz_v2',
+    id: 'aulaa_direct',
+    name: 'Aulaa — Pilih Channel Langsung (White-Label)',
+    type: 'aulaa_direct',
     description:
-      'Buat nomor Virtual Account melalui endpoint Paywuz v2 atau pilih bank di halaman pembayaran Paywuz.',
-    statusLabel: 'Paywuz v2 • /transactions/va',
-    available: true
-  },
-  {
-    id: 'paywuz_qris',
-    name: 'Paywuz — QRIS',
-    type: 'paywuz_v2',
-    description:
-      'Bayar instan dengan QRIS. Membutuhkan nama, email, dan nomor HP Indonesia aktif (08xx / 62xx / +62).',
-    statusLabel: 'Paywuz v2 • /transactions/qris',
-    available: true
-  },
-  {
-    id: 'paywuz_retail',
-    name: 'Paywuz — Gerai Retail (Alfamart / Indomaret)',
-    type: 'paywuz_v2',
-    description:
-      'Dapatkan kode pembayaran untuk dibayar di kasir Alfamart atau Indomaret.',
-    statusLabel: 'Paywuz v2 • /transactions/retail',
+      'Kunci metode pembayaran spesifik dari proyek Aulaa (seperti QRIS atau Virtual Account) untuk menampilkan QR Code / nomor pembayaran langsung di halaman konfirmasi.',
+    statusLabel: 'Aulaa API • Direct Channel',
     available: true
   },
   {
@@ -59,7 +41,7 @@ export const PAYMENT_CHANNELS: PaymentChannelOption[] = [
     type: 'manual_verification',
     description:
       'Kirim reservasi Anda sekarang dan selesaikan transfer dengan mencantumkan Kode Booking. Status pembayaran tetap Belum Dibayar hingga diverifikasi oleh tim Keuangan ASRIVA.',
-    statusLabel: 'Tersedia — Verifikasi Manual',
+    statusLabel: 'Verifikasi Manual',
     available: true
   },
   {
@@ -68,7 +50,7 @@ export const PAYMENT_CHANNELS: PaymentChannelOption[] = [
     type: 'pay_at_office',
     description:
       'Amankan slot reservasi Anda dan lakukan pelunasan langsung di konter layanan tur kami dengan menunjukkan Kode Booking.',
-    statusLabel: 'Tersedia — Reservasi Slot',
+    statusLabel: 'Reservasi Slot',
     available: true
   }
 ];

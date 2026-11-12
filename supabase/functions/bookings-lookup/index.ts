@@ -62,34 +62,24 @@ function mapRowToBooking(row: Record<string, unknown>, txRow?: Record<string, un
     bookingStatus: row.booking_status,
     paymentStatus: row.payment_status,
     review: row.review ?? undefined,
-    paywuzTransaction: txRow
+    aulaaTransaction: txRow
       ? {
           id: txRow.id,
           orderId: txRow.order_id,
           status: txRow.status,
-          method: {
-            type: txRow.method_type ?? null,
-            code: txRow.method_code ?? null,
-            name: txRow.method_name ?? null
-          },
+          paymentMethod: txRow.payment_method ?? null,
+          paymentMethodName: txRow.payment_method_name ?? null,
+          paymentMethodType: txRow.payment_method_type ?? null,
           amount: txRow.amount,
-          fee: {
-            amount: txRow.fee_amount,
-            paidBy: txRow.fee_paid_by
-          },
-          totalPayment: txRow.total_payment,
-          netAmount: txRow.net_amount,
-          payment: {
-            url: txRow.payment_url,
-            vaNumber: txRow.va_number ?? null,
-            qrString: txRow.qr_string ?? null,
-            retailCode: txRow.retail_code ?? null
-          },
-          customer: txRow.customer ?? null,
-          metadata: txRow.metadata ?? null,
+          feeAmount: txRow.fee_amount ?? 0,
+          totalAmount: txRow.total_amount ?? txRow.amount,
+          paymentLink: txRow.payment_link,
+          paymentNumber: txRow.payment_number ?? null,
+          currency: txRow.currency ?? 'IDR',
+          countryCode: txRow.country_code ?? 'ID',
           expiresAt: txRow.expires_at ?? null,
           paidAt: txRow.paid_at ?? null,
-          createdAt: txRow.paywuz_created_at ?? null
+          createdAt: txRow.aulaa_created_at ?? null
         }
       : undefined
   };
@@ -163,7 +153,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const { data: txRow } = await supabase
-      .from('paywuz_transactions')
+      .from('aulaa_transactions')
       .select('*')
       .eq('order_id', bookingRow.booking_reference)
       .maybeSingle();

@@ -187,9 +187,9 @@ const BookingRoute: React.FC<BookingRouteProps> = ({
 interface BookingResultRouteProps {
   isConfirmationScreen: boolean;
   bookings: Booking[];
-  isCheckingPaywuzStatus: boolean;
-  isCancellingPaywuz: boolean;
-  onRefreshPaywuzStatus: (bookingReference: string) => void;
+  isCheckingAulaaStatus: boolean;
+  isCancellingAulaa: boolean;
+  onRefreshAulaaStatus: (bookingReference: string) => void;
   onBack: () => void;
   onFallbackToBookings: () => void;
   onOpenBookingDetail: (bookingReference: string) => void;
@@ -202,9 +202,9 @@ interface BookingResultRouteProps {
 const BookingResultRoute: React.FC<BookingResultRouteProps> = ({
   isConfirmationScreen,
   bookings,
-  isCheckingPaywuzStatus,
-  isCancellingPaywuz,
-  onRefreshPaywuzStatus,
+  isCheckingAulaaStatus,
+  isCancellingAulaa,
+  onRefreshAulaaStatus,
   onBack,
   onFallbackToBookings,
   onOpenBookingDetail,
@@ -220,9 +220,9 @@ const BookingResultRoute: React.FC<BookingResultRouteProps> = ({
         bookingReference={bookingReference}
         isConfirmationScreen={isConfirmationScreen}
         bookings={bookings}
-        isCheckingPaywuzStatus={isCheckingPaywuzStatus}
-        isCancellingPaywuz={isCancellingPaywuz}
-        onRefreshPaywuzStatus={onRefreshPaywuzStatus}
+        isCheckingAulaaStatus={isCheckingAulaaStatus}
+        isCancellingAulaa={isCancellingAulaa}
+        onRefreshAulaaStatus={onRefreshAulaaStatus}
         onBack={onBack}
         onFallbackToBookings={onFallbackToBookings}
         onOpenBookingDetail={onOpenBookingDetail}
@@ -423,14 +423,12 @@ export function App() {
                 sameWhatsappAsPhone={app.sameWhatsappAsPhone}
                 contactIsMainTraveler={app.contactIsMainTraveler}
                 selectedPaymentId={app.selectedPaymentId}
-                selectedPaywuzBank={app.selectedPaywuzBank}
-                selectedPaywuzRetailer={app.selectedPaywuzRetailer}
-                paywuzMethods={app.paywuzMethods}
-                paywuzMethodsLoading={app.paywuzMethodsLoading}
-                paywuzMethodsError={app.paywuzMethodsError}
-                onRetryPaywuzMethods={() => void app.loadPaywuzMethods(app.activePricing.totalAmount)}
-                onSelectPaywuzBank={app.setSelectedPaywuzBank}
-                onSelectPaywuzRetailer={app.setSelectedPaywuzRetailer}
+                selectedAulaaMethodCode={app.selectedAulaaMethodCode}
+                aulaaMethods={app.aulaaMethods}
+                aulaaMethodsLoading={app.aulaaMethodsLoading}
+                aulaaMethodsError={app.aulaaMethodsError}
+                onRetryAulaaMethods={() => void app.loadAulaaMethods()}
+                onSelectAulaaMethodCode={app.setSelectedAulaaMethodCode}
                 agreedTerms={app.agreedTerms}
                 formErrors={app.formErrors}
                 isSubmittingBooking={app.isSubmittingBooking}
@@ -455,9 +453,9 @@ export function App() {
             <BookingResultRoute
               isConfirmationScreen
               bookings={app.bookings}
-              isCheckingPaywuzStatus={app.isCheckingPaywuzStatus}
-              isCancellingPaywuz={app.isCancellingPaywuz}
-              onRefreshPaywuzStatus={app.handleRefreshPaywuzStatus}
+              isCheckingAulaaStatus={app.isCheckingAulaaStatus}
+              isCancellingAulaa={app.isCancellingAulaa}
+              onRefreshAulaaStatus={app.handleRefreshAulaaStatus}
               onBack={() => app.goBack('/trips')}
               onFallbackToBookings={() => navigate('/trips', { replace: true })}
               onOpenBookingDetail={app.openBookingDetail}
@@ -474,9 +472,9 @@ export function App() {
             <BookingResultRoute
               isConfirmationScreen={false}
               bookings={app.bookings}
-              isCheckingPaywuzStatus={app.isCheckingPaywuzStatus}
-              isCancellingPaywuz={app.isCancellingPaywuz}
-              onRefreshPaywuzStatus={app.handleRefreshPaywuzStatus}
+              isCheckingAulaaStatus={app.isCheckingAulaaStatus}
+              isCancellingAulaa={app.isCancellingAulaa}
+              onRefreshAulaaStatus={app.handleRefreshAulaaStatus}
               onBack={() => app.goBack('/trips')}
               onFallbackToBookings={() => navigate('/trips', { replace: true })}
               onOpenBookingDetail={app.openBookingDetail}

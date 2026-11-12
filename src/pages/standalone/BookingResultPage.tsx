@@ -1,7 +1,7 @@
 import React from 'react';
 import { Briefcase, CheckCircle2, Copy, MessageSquarePlus, Star } from 'lucide-react';
+import { AulaaPaymentBox } from '../../components/AulaaPaymentBox';
 import { BookingProgressTracker } from '../../components/BookingProgressTracker';
-import { PaywuzPaymentBox } from '../../components/PaywuzPaymentBox';
 import { AlertBanner } from '../../components/ui/AlertBanner';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -13,9 +13,9 @@ export interface BookingResultPageProps {
   bookingReference: string;
   isConfirmationScreen: boolean;
   bookings: Booking[];
-  isCheckingPaywuzStatus?: boolean;
-  isCancellingPaywuz?: boolean;
-  onRefreshPaywuzStatus?: (bookingReference: string) => void;
+  isCheckingAulaaStatus?: boolean;
+  isCancellingAulaa?: boolean;
+  onRefreshAulaaStatus?: (bookingReference: string) => void;
   onBack: () => void;
   onFallbackToBookings: () => void;
   onOpenBookingDetail: (bookingReference: string) => void;
@@ -29,9 +29,9 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
   bookingReference,
   isConfirmationScreen,
   bookings,
-  isCheckingPaywuzStatus = false,
-  isCancellingPaywuz = false,
-  onRefreshPaywuzStatus,
+  isCheckingAulaaStatus = false,
+  isCancellingAulaa = false,
+  onRefreshAulaaStatus,
   onBack,
   onFallbackToBookings,
   onOpenBookingDetail,
@@ -109,28 +109,28 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
 
         <AlertBanner
           type={
-            booking.tripCategory === 'cancelled' || booking.paymentStatus === 'Pembayaran Gagal'
+            booking.tripCategory === 'cancelled' ||
+            booking.paymentStatus === 'Pembayaran Gagal' ||
+            booking.paymentStatus === 'Kadaluarsa (Melewati Batas Waktu)'
               ? 'error'
               : booking.paymentStatus === 'Lunas (Terverifikasi)'
               ? 'success'
-              : booking.paymentStatus === 'Settlement (Menunggu Dana Masuk)'
-              ? 'info'
               : 'warning'
           }
           title={`Status Pembayaran: ${booking.paymentStatus}`}
         >
           Metode penyelesaian: <strong>{booking.paymentMethodName}</strong>.{' '}
-          {booking.paywuzTransaction
-            ? 'Selesaikan pembayaran melalui instruksi Paywuz v2 di bawah ini atau cek status transaksi secara berkala.'
+          {booking.aulaaTransaction
+            ? 'Selesaikan pembayaran melalui halaman checkout Aulaa atau instruksi di bawah ini, lalu cek status transaksi secara berkala.'
             : `Cantumkan kode ${booking.bookingReference} saat menyelesaikan pembayaran bersama ASRIVA Travel & Tours.`}
         </AlertBanner>
 
-        {booking.paywuzTransaction && (
-          <PaywuzPaymentBox
-            transaction={booking.paywuzTransaction}
-            isCheckingStatus={isCheckingPaywuzStatus}
-            isCancelling={isCancellingPaywuz}
-            onRefreshStatus={() => onRefreshPaywuzStatus?.(booking.bookingReference)}
+        {booking.aulaaTransaction && (
+          <AulaaPaymentBox
+            transaction={booking.aulaaTransaction}
+            isCheckingStatus={isCheckingAulaaStatus}
+            isCancelling={isCancellingAulaa}
+            onRefreshStatus={() => onRefreshAulaaStatus?.(booking.bookingReference)}
             onCancelTransaction={() => onCancelBooking(booking.bookingReference)}
             onShowToast={onShowToast}
           />
@@ -267,7 +267,7 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
               <span>Beri Ulasan Perjalanan</span>
             </button>
           )}
-          {booking.tripCategory === 'upcoming' && !booking.paywuzTransaction && (
+          {booking.tripCategory === 'upcoming' && !booking.aulaaTransaction && (
             <button
               type="button"
               onClick={() => onCancelBooking(booking.bookingReference)}

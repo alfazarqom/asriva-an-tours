@@ -5,16 +5,19 @@ import { INITIAL_NOTIFICATIONS, PAYMENT_CHANNELS } from '../data/constants';
 import { PACKAGES_DATA } from '../data/packages';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
-  cancelPaywuzTransaction,
-  createBookingWithPaywuz,
-  fetchPaywuzPaymentMethods,
+  AulaaGatewayException,
+  cancelAulaaPayment,
+  createBookingWithAulaa,
+  fetchAulaaPaymentMethods,
   lookupBookingInSupabase,
-  PaywuzGatewayException,
-  refreshPaywuzTransactionStatus,
+  refreshAulaaPaymentStatus,
   saveBookingReviewInSupabase
-} from '../services/paywuzBackend';
+} from '../services/aulaaBackend';
 import {
   AppNotification,
+  AulaaPaymentMethod,
+  AulaaTransaction,
+  AulaaTransactionStatus,
   Booking,
   BookingDraft,
   BookingReview,
@@ -22,9 +25,6 @@ import {
   GuestInformation,
   InfoPageKey,
   MainTab,
-  PaywuzEndpointMode,
-  PaywuzPaymentMethod,
-  PaywuzTransaction,
   PriceFilter,
   SortBy,
   ToastMessage,
@@ -33,7 +33,7 @@ import {
 import { calculateBookingPricing, reconcileTravelers } from '../utils/booking';
 import { generateBookingReference } from '../utils/formatters';
 import { triggerHaptic } from '../utils/nativeExperience';
-import { isValidEmail, isValidIndonesianMobile, isValidPhone } from '../utils/validators';
+import { isValidEmail, isValidPhone } from '../utils/validators';
 
 export const TAB_ROUTES: Record<MainTab, string> = {
   home: '/',
@@ -119,15 +119,14 @@ export function useTravelApp() {
   const [sameWhatsappAsPhone, setSameWhatsappAsPhone] = useState<boolean>(true);
   const [contactIsMainTraveler, setContactIsMainTraveler] = useState<boolean>(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
-    isSupabaseConfigured() ? 'paywuz_all' : 'bank_transfer_verified'
+    isSupabaseConfigured() ? 'aulaa_all' : 'bank_transfer_verified'
   );
-  const [selectedPaywuzBank, setSelectedPaywuzBank] = useState<string>('');
-  const [selectedPaywuzRetailer, setSelectedPaywuzRetailer] = useState<'ALFAMART' | 'INDOMARET' | ''>('');
-  const [paywuzMethods, setPaywuzMethods] = useState<PaywuzPaymentMethod[]>([]);
-  const [paywuzMethodsLoading, setPaywuzMethodsLoading] = useState<boolean>(false);
-  const [paywuzMethodsError, setPaywuzMethodsError] = useState<string>('');
-  const [isCheckingPaywuzStatus, setIsCheckingPaywuzStatus] = useState<boolean>(false);
-  const [isCancellingPaywuz, setIsCancellingPaywuz] = useState<boolean>(false);
+  const [selectedAulaaMethodCode, setSelectedAulaaMethodCode] = useState<string>('');
+  const [aulaaMethods, setAulaaMethods] = useState<AulaaPaymentMethod[]>([]);
+  const [aulaaMethodsLoading, setAulaaMethodsLoading] = useState<boolean>(false);
+  const [aulaaMethodsError, setAulaaMethodsError] = useState<string>('');
+  const [isCheckingAulaaStatus, setIsCheckingAulaaStatus] = useState<boolean>(false);
+  const [isCancellingAulaa, setIsCancellingAulaa] = useState<boolean>(false);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
@@ -463,18 +462,16 @@ export function useTravelApp() {
       errors.paymentMethod = 'Silakan pilih metode penyelesaian pembayaran yang tersedia.';
     }
 
-    if (selectedPaymentId.startsWith('paywuz_') && !isSupabaseConfigured()) {
+    const isAulaaChannel =
+      chosenPayment?.type === 'aulaa_hosted' || chosenPayment?.type === 'aulaa_direct';
+
+    if (isAulaaChannel && !isSupabaseConfigured()) {
       errors.paymentMethod =
-        'Metode Paywuz v2 memerlukan konfigurasi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.';
+        'Metode Aulaa memerlukan konfigurasi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.';
     }
 
-    if (selectedPaymentId === 'paywuz_qris' && !isValidIndonesianMobile(guestInfo.phone)) {
-      errors.guestPhone =
-        'Pembayaran QRIS Paywuz memerlukan nomor HP Indonesia yang valid (08xx, 62xx, atau +62).';
-    }
-
-    if (selectedPaymentId === 'paywuz_retail' && !selectedPaywuzRetailer) {
-      errors.paymentMethod = 'Pilih gerai retail (Alfamart atau Indomaret) untuk pembayaran retail.';
+    if (selectedPaymentId === 'aulaa_direct' && !selectedAulaaMethodCode) {
+      errors.paymentMethod = 'Silakan pilih salah satu channel pembayaran Aulaa yang tersedia.';
     }
 
     if (!agreedTerms) {
@@ -488,64 +485,64 @@ export function useTravelApp() {
     bookingDraft,
     guestInfo,
     sameWhatsappAsPhone,
-    selectedPaymentId,
-    selectedPaywuzRetailer
+    selectedAulaaMethodCode,
+    selectedPaymentId
   ]);
 
-  const loadPaywuzMethods = useCallback(async (amount: number) => {
+  const loadAulaaMethods = useCallback(async () => {
     if (!isSupabaseConfigured()) {
-      setPaywuzMethods([]);
-      setPaywuzMethodsError('');
+      setAulaaMethods([]);
+      setAulaaMethodsError('');
       return;
     }
 
-    setPaywuzMethodsLoading(true);
-    setPaywuzMethodsError('');
+    setAulaaMethodsLoading(true);
+    setAulaaMethodsError('');
     try {
-      const methods = await fetchPaywuzPaymentMethods(amount);
-      setPaywuzMethods(methods);
+      const methods = await fetchAulaaPaymentMethods();
+      setAulaaMethods(methods);
     } catch (err) {
       const msg =
-        err instanceof PaywuzGatewayException
+        err instanceof AulaaGatewayException
           ? err.message
-          : 'Gagal memuat daftar channel pembayaran Paywuz v2.';
-      setPaywuzMethodsError(msg);
-      setPaywuzMethods([]);
+          : 'Gagal memuat daftar metode pembayaran Aulaa.';
+      setAulaaMethodsError(msg);
+      setAulaaMethods([]);
     } finally {
-      setPaywuzMethodsLoading(false);
+      setAulaaMethodsLoading(false);
     }
   }, []);
 
-  // Muat daftar channel Paywuz v2 secara otomatis saat membuka /checkout
+  // Muat daftar metode Aulaa secara otomatis saat membuka /checkout
   useEffect(() => {
     if (location.pathname === '/checkout' && isSupabaseConfigured()) {
-      void loadPaywuzMethods(activePricing.totalAmount);
+      void loadAulaaMethods();
     }
-  }, [activePricing.totalAmount, loadPaywuzMethods, location.pathname]);
+  }, [loadAulaaMethods, location.pathname]);
 
-  // Sinkronisasi Realtime dari Supabase Webhook Paywuz v2
+  // Sinkronisasi Realtime dari Supabase Webhook Aulaa
   useEffect(() => {
     if (!supabase) return;
 
     const channel = supabase
-      .channel('paywuz-tx-updates')
+      .channel('aulaa-tx-updates')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'paywuz_transactions' },
+        { event: 'UPDATE', schema: 'public', table: 'aulaa_transactions' },
         (payload) => {
           const row = payload.new as Record<string, unknown>;
           const orderId = String(row.order_id || '');
-          const nextStatus = row.status as PaywuzTransaction['status'];
+          const nextStatus = row.status as AulaaTransactionStatus;
           if (!orderId || !nextStatus) return;
 
           setBookings((prev) =>
             prev.map((b) => {
               if (b.bookingReference !== orderId) return b;
               const nextPaymentStatus: Booking['paymentStatus'] =
-                nextStatus === 'settlement'
-                  ? 'Settlement (Menunggu Dana Masuk)'
-                  : nextStatus === 'success'
-                    ? 'Lunas (Terverifikasi)'
+                nextStatus === 'paid'
+                  ? 'Lunas (Terverifikasi)'
+                  : nextStatus === 'expired'
+                    ? 'Kadaluarsa (Melewati Batas Waktu)'
                     : nextStatus === 'failed'
                       ? 'Pembayaran Gagal'
                       : nextStatus === 'cancelled'
@@ -553,29 +550,37 @@ export function useTravelApp() {
                         : 'Belum Dibayar - Menunggu Pembayaran';
 
               const nextBookingStatus: Booking['bookingStatus'] =
-                nextStatus === 'settlement'
-                  ? 'Terkonfirmasi - Menunggu Settlement'
-                  : nextStatus === 'success'
-                    ? 'Terkonfirmasi - Lunas'
+                nextStatus === 'paid'
+                  ? 'Terkonfirmasi - Lunas'
+                  : nextStatus === 'expired'
+                    ? 'Kadaluarsa'
                     : nextStatus === 'cancelled'
                       ? 'Dibatalkan'
-                      : 'Menunggu Pembayaran (Paywuz)';
+                      : 'Menunggu Pembayaran (Aulaa)';
 
               return {
                 ...b,
-                tripCategory: nextStatus === 'cancelled' ? 'cancelled' : b.tripCategory,
+                tripCategory:
+                  nextStatus === 'cancelled' || nextStatus === 'expired' ? 'cancelled' : b.tripCategory,
                 bookingStatus: nextBookingStatus,
                 paymentStatus: nextPaymentStatus,
-                paywuzTransaction: b.paywuzTransaction
+                aulaaTransaction: b.aulaaTransaction
                   ? {
-                      ...b.paywuzTransaction,
+                      ...b.aulaaTransaction,
                       status: nextStatus,
-                      paidAt: (row.paid_at as string | null) ?? b.paywuzTransaction.paidAt,
-                      method: {
-                        type: (row.method_type as PaywuzTransaction['method']['type']) ?? b.paywuzTransaction.method.type,
-                        code: (row.method_code as string | null) ?? b.paywuzTransaction.method.code,
-                        name: (row.method_name as string | null) ?? b.paywuzTransaction.method.name
-                      }
+                      paymentMethod:
+                        (row.payment_method as string | null) ?? b.aulaaTransaction.paymentMethod,
+                      feeAmount:
+                        typeof row.fee_amount === 'number'
+                          ? row.fee_amount
+                          : b.aulaaTransaction.feeAmount,
+                      totalAmount:
+                        typeof row.total_amount === 'number'
+                          ? row.total_amount
+                          : b.aulaaTransaction.totalAmount,
+                      paymentNumber:
+                        (row.payment_number as string | null) ?? b.aulaaTransaction.paymentNumber,
+                      paidAt: (row.paid_at as string | null) ?? b.aulaaTransaction.paidAt
                     }
                   : undefined
               };
@@ -605,7 +610,13 @@ export function useTravelApp() {
         activeBookingPackage.packageOptions[0];
       const reference = generateBookingReference();
       const effectiveWhatsapp = sameWhatsappAsPhone ? guestInfo.phone.trim() : guestInfo.whatsapp.trim();
-      const isPaywuzChannel = chosenPayment.type === 'paywuz_v2';
+      const isAulaaChannel =
+        chosenPayment.type === 'aulaa_hosted' || chosenPayment.type === 'aulaa_direct';
+
+      const selectedMethodObj =
+        chosenPayment.type === 'aulaa_direct'
+          ? aulaaMethods.find((m) => m.code === selectedAulaaMethodCode)
+          : undefined;
 
       const newBooking: Booking = {
         bookingReference: reference,
@@ -642,43 +653,36 @@ export function useTravelApp() {
         totalAmount: activePricing.totalAmount,
         specialRequest: bookingDraft.specialRequest.trim(),
         paymentMethodId: chosenPayment.id,
-        paymentMethodName: chosenPayment.name,
+        paymentMethodName: selectedMethodObj
+          ? `Aulaa — ${selectedMethodObj.name}`
+          : chosenPayment.name,
         tripCategory: 'upcoming',
-        bookingStatus: isPaywuzChannel
-          ? 'Menunggu Pembayaran (Paywuz)'
+        bookingStatus: isAulaaChannel
+          ? 'Menunggu Pembayaran (Aulaa)'
           : chosenPayment.type === 'pay_at_office'
             ? 'Terkonfirmasi - Slot Ditahan'
             : 'Menunggu Verifikasi Pembayaran',
         paymentStatus: 'Belum Dibayar - Menunggu Pembayaran'
       };
 
-      if (isPaywuzChannel || isSupabaseConfigured()) {
-        const endpointMode: PaywuzEndpointMode =
-          selectedPaymentId === 'paywuz_va'
-            ? 'va'
-            : selectedPaymentId === 'paywuz_qris'
-              ? 'qris'
-              : selectedPaymentId === 'paywuz_retail'
-                ? 'retail'
-                : 'all';
-
-        const result = await createBookingWithPaywuz({
+      if (isAulaaChannel || isSupabaseConfigured()) {
+        const result = await createBookingWithAulaa({
           booking: newBooking,
-          paywuz: isPaywuzChannel
+          aulaa: isAulaaChannel
             ? {
-                endpointMode,
-                bank: endpointMode === 'va' && selectedPaywuzBank ? selectedPaywuzBank : undefined,
-                retailer:
-                  endpointMode === 'retail' && selectedPaywuzRetailer
-                    ? selectedPaywuzRetailer
+                paymentMethod:
+                  chosenPayment.type === 'aulaa_direct' && selectedAulaaMethodCode
+                    ? selectedAulaaMethodCode
                     : undefined,
+                paymentMethodName: selectedMethodObj?.name,
+                paymentMethodType: selectedMethodObj?.type,
                 redirectUrl: `${window.location.origin}/booking/confirmed/${reference}`
               }
             : undefined
         });
 
         if (result.transaction) {
-          newBooking.paywuzTransaction = result.transaction;
+          newBooking.aulaaTransaction = result.transaction;
         }
       }
 
@@ -689,7 +693,7 @@ export function useTravelApp() {
       navigate(`/booking/confirmed/${reference}`, { replace: true });
       showToast(`Pemesanan ${reference} berhasil dibuat.`, 'success');
     } catch (err) {
-      if (err instanceof PaywuzGatewayException) {
+      if (err instanceof AulaaGatewayException) {
         if (err.field === 'customer') {
           setFormErrors((prev) => ({ ...prev, guestPhone: err.message }));
         }
@@ -703,32 +707,32 @@ export function useTravelApp() {
   }, [
     activeBookingPackage,
     activePricing,
+    aulaaMethods,
     bookingDraft,
     guestInfo,
     isSubmittingBooking,
     navigate,
     sameWhatsappAsPhone,
+    selectedAulaaMethodCode,
     selectedPaymentId,
-    selectedPaywuzBank,
-    selectedPaywuzRetailer,
     showToast,
     validateCheckoutForm
   ]);
 
-  const handleRefreshPaywuzStatus = useCallback(
+  const handleRefreshAulaaStatus = useCallback(
     async (bookingReference: string) => {
-      if (isCheckingPaywuzStatus) return;
-      setIsCheckingPaywuzStatus(true);
+      if (isCheckingAulaaStatus) return;
+      setIsCheckingAulaaStatus(true);
       try {
-        const tx = await refreshPaywuzTransactionStatus(bookingReference);
+        const tx: AulaaTransaction = await refreshAulaaPaymentStatus(bookingReference);
         setBookings((prev) =>
           prev.map((b) => {
             if (b.bookingReference !== bookingReference) return b;
             const nextPaymentStatus: Booking['paymentStatus'] =
-              tx.status === 'settlement'
-                ? 'Settlement (Menunggu Dana Masuk)'
-                : tx.status === 'success'
-                  ? 'Lunas (Terverifikasi)'
+              tx.status === 'paid'
+                ? 'Lunas (Terverifikasi)'
+                : tx.status === 'expired'
+                  ? 'Kadaluarsa (Melewati Batas Waktu)'
                   : tx.status === 'failed'
                     ? 'Pembayaran Gagal'
                     : tx.status === 'cancelled'
@@ -736,43 +740,44 @@ export function useTravelApp() {
                       : 'Belum Dibayar - Menunggu Pembayaran';
 
             const nextBookingStatus: Booking['bookingStatus'] =
-              tx.status === 'settlement'
-                ? 'Terkonfirmasi - Menunggu Settlement'
-                : tx.status === 'success'
-                  ? 'Terkonfirmasi - Lunas'
+              tx.status === 'paid'
+                ? 'Terkonfirmasi - Lunas'
+                : tx.status === 'expired'
+                  ? 'Kadaluarsa'
                   : tx.status === 'cancelled'
                     ? 'Dibatalkan'
-                    : 'Menunggu Pembayaran (Paywuz)';
+                    : 'Menunggu Pembayaran (Aulaa)';
 
             return {
               ...b,
-              tripCategory: tx.status === 'cancelled' ? 'cancelled' : b.tripCategory,
+              tripCategory:
+                tx.status === 'cancelled' || tx.status === 'expired' ? 'cancelled' : b.tripCategory,
               bookingStatus: nextBookingStatus,
               paymentStatus: nextPaymentStatus,
-              paywuzTransaction: tx
+              aulaaTransaction: tx
             };
           })
         );
-        showToast(`Status transaksi Paywuz: ${tx.status}`, 'info');
+        showToast(`Status pembayaran Aulaa: ${tx.status}`, 'info');
       } catch (err) {
-        const msg = err instanceof PaywuzGatewayException ? err.message : 'Gagal memeriksa status transaksi.';
+        const msg = err instanceof AulaaGatewayException ? err.message : 'Gagal memeriksa status transaksi.';
         showToast(msg, 'error');
       } finally {
-        setIsCheckingPaywuzStatus(false);
+        setIsCheckingAulaaStatus(false);
       }
     },
-    [isCheckingPaywuzStatus, showToast]
+    [isCheckingAulaaStatus, showToast]
   );
 
   const handleCancelBooking = useCallback(
     async (bookingReference: string) => {
       const target = bookings.find((b) => b.bookingReference === bookingReference);
-      const hasPaywuzTx = Boolean(target?.paywuzTransaction);
+      const hasAulaaTx = Boolean(target?.aulaaTransaction);
 
-      if (hasPaywuzTx && isSupabaseConfigured()) {
-        setIsCancellingPaywuz(true);
+      if (hasAulaaTx && isSupabaseConfigured()) {
+        setIsCancellingAulaa(true);
         try {
-          const result = await cancelPaywuzTransaction(bookingReference);
+          const result = await cancelAulaaPayment(bookingReference);
           setBookings((prev) =>
             prev.map((b) =>
               b.bookingReference === bookingReference
@@ -781,20 +786,20 @@ export function useTravelApp() {
                     tripCategory: 'cancelled',
                     bookingStatus: 'Dibatalkan',
                     paymentStatus: 'Dibatalkan',
-                    paywuzTransaction: result.data ?? b.paywuzTransaction
+                    aulaaTransaction: result.data ?? b.aulaaTransaction
                   }
                 : b
             )
           );
-          showToast(`Transaksi Paywuz & pemesanan ${bookingReference} dibatalkan.`, 'info');
+          showToast(`Transaksi Aulaa & pemesanan ${bookingReference} dibatalkan.`, 'info');
         } catch (err) {
           const msg =
-            err instanceof PaywuzGatewayException
+            err instanceof AulaaGatewayException
               ? err.message
               : 'Transaksi tidak dapat dibatalkan saat ini.';
           showToast(msg, 'error');
         } finally {
-          setIsCancellingPaywuz(false);
+          setIsCancellingAulaa(false);
         }
         return;
       }
@@ -942,17 +947,15 @@ export function useTravelApp() {
     setContactIsMainTraveler,
     selectedPaymentId,
     setSelectedPaymentId,
-    selectedPaywuzBank,
-    setSelectedPaywuzBank,
-    selectedPaywuzRetailer,
-    setSelectedPaywuzRetailer,
-    paywuzMethods,
-    paywuzMethodsLoading,
-    paywuzMethodsError,
-    loadPaywuzMethods,
-    isCheckingPaywuzStatus,
-    isCancellingPaywuz,
-    handleRefreshPaywuzStatus,
+    selectedAulaaMethodCode,
+    setSelectedAulaaMethodCode,
+    aulaaMethods,
+    aulaaMethodsLoading,
+    aulaaMethodsError,
+    loadAulaaMethods,
+    isCheckingAulaaStatus,
+    isCancellingAulaa,
+    handleRefreshAulaaStatus,
     agreedTerms,
     setAgreedTerms,
     formErrors,

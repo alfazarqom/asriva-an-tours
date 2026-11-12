@@ -132,55 +132,32 @@ export interface GuestInformation {
   whatsapp: string;
 }
 
-export type PaywuzMethodType = 'virtual_account' | 'qris' | 'retail';
-export type PaywuzEndpointMode = 'va' | 'qris' | 'retail' | 'all';
-export type PaywuzTransactionStatus = 'pending' | 'settlement' | 'success' | 'failed' | 'cancelled';
+export type AulaaMethodType = 'qr_code' | 'virtual_account' | 'card' | 'ewallet' | 'retail' | string;
+export type AulaaTransactionStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
 
-export interface PaywuzPaymentMethod {
+export interface AulaaPaymentMethod {
   code: string;
   name: string;
-  type: PaywuzMethodType;
-  limits: {
-    min: number;
-    max: number;
-  };
-  fee: {
-    flat: number;
-    percent: number;
-    amount: number | null;
-  };
-  available: boolean | null;
+  type: AulaaMethodType;
+  isAvailable: boolean;
+  minAmount: number;
+  maxAmount: number;
 }
 
-export interface PaywuzTransaction {
+export interface AulaaTransaction {
   id: string;
   orderId: string;
-  status: PaywuzTransactionStatus;
-  method: {
-    type: PaywuzMethodType | null;
-    code: string | null;
-    name: string | null;
-  };
+  status: AulaaTransactionStatus;
+  paymentMethod: string | null;
+  paymentMethodName: string | null;
+  paymentMethodType: string | null;
   amount: number;
-  fee: {
-    amount: number;
-    paidBy: 'customer' | 'merchant';
-  };
-  totalPayment: number;
-  netAmount: number;
-  payment: {
-    url: string;
-    vaNumber: string | null;
-    qrString: string | null;
-    retailCode: string | null;
-  };
-  customer: {
-    name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
-  } | null;
-  metadata: Record<string, unknown> | null;
+  feeAmount: number;
+  totalAmount: number;
+  paymentLink: string;
+  paymentNumber: string | null;
+  currency: string;
+  countryCode: string;
   expiresAt: string | null;
   paidAt: string | null;
   createdAt: string | null;
@@ -189,7 +166,7 @@ export interface PaywuzTransaction {
 export interface PaymentChannelOption {
   id: string;
   name: string;
-  type: 'paywuz_v2' | 'manual_verification' | 'pay_at_office';
+  type: 'aulaa_hosted' | 'aulaa_direct' | 'manual_verification' | 'pay_at_office';
   description: string;
   statusLabel: string;
   available: boolean;
@@ -230,20 +207,20 @@ export interface Booking {
   paymentMethodName: string;
   tripCategory: 'upcoming' | 'completed' | 'cancelled';
   bookingStatus:
-    | 'Menunggu Pembayaran (Paywuz)'
+    | 'Menunggu Pembayaran (Aulaa)'
     | 'Menunggu Verifikasi Pembayaran'
-    | 'Terkonfirmasi - Menunggu Settlement'
     | 'Terkonfirmasi - Slot Ditahan'
     | 'Terkonfirmasi - Lunas'
+    | 'Kadaluarsa'
     | 'Selesai'
     | 'Dibatalkan';
   paymentStatus:
     | 'Belum Dibayar - Menunggu Pembayaran'
-    | 'Settlement (Menunggu Dana Masuk)'
     | 'Lunas (Terverifikasi)'
+    | 'Kadaluarsa (Melewati Batas Waktu)'
     | 'Pembayaran Gagal'
     | 'Dibatalkan';
-  paywuzTransaction?: PaywuzTransaction;
+  aulaaTransaction?: AulaaTransaction;
   review?: BookingReview;
 }
 
