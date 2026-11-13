@@ -35,13 +35,18 @@ Deno.serve(async (req: Request) => {
       countryCode: existingTx.country_code, expiresAt: existingTx.expires_at, paidAt: existingTx.paid_at, createdAt: existingTx.aulaa_created_at
     } });
     const apiKey = Deno.env.get('AULAA_API_KEY')?.trim();
+    const appBaseUrl = Deno.env.get('APP_BASE_URL')?.trim();
+    if (!appBaseUrl) return jsonResponse({ error: { code: 'configuration_error', message: 'APP_BASE_URL belum dikonfigurasi.' } }, 500);
+    const appUrl = new URL(appBaseUrl);
+    if (appUrl.protocol !== 'https:') return jsonResponse({ error: { code: 'configuration_error' } }, 500);
+    const redirectUrl = new URL(`/booking/confirmed/${encodeURIComponent(orderId)}`, appUrl).toString();
     if (!apiKey) return jsonResponse({ error: { code: 'configuration_error' } }, 500);
 
     let upstream: Response;
     try {
       upstream = await fetch(`${AULAA_API_BASE}/payments`, {
         method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, amount: booking.total_amount }), signal: AbortSignal.timeout(15000)
+        body: JSON.stringify({ order_id: orderId, amount: booking.total_amount, redirect_url: redirectUrl }), signal: AbortSignal.timeout(15000)
       });
     } catch {
       upstream = await fetch(`${AULAA_API_BASE}/payments`, {
@@ -68,13 +73,16 @@ Deno.serve(async (req: Request) => {
       !['pending','paid','expired','cancelled','failed','refunded'].includes(status)) {
       return jsonResponse({ error: { code: 'aulaa_response_mismatch' } }, 409);
     }
+    const paymentLink = String(payment.payment_link || `https://payment.aulaa.co/pay/${payment.id}`);
+    const paymentLinkUrl = new URL(paymentLink);
+    if (paymentLinkUrl.protocol !== 'https:' || paymentLinkUrl.hostname !== 'payment.aulaa.co') return jsonResponse({ error: { code: 'aulaa_payment_link_invalid' } }, 409);
     const record = {
       id: String(payment.id), order_id: orderId, status, amount,
       fee_amount: Number(payment.fee_amount || 0), charged_amount: Number(payment.charged_amount ?? amount),
       currency, country_code: countryCode, payment_method: payment.payment_method ?? null,
       payment_method_name: booking.payment_method_name, payment_method_type: null,
-      payment_link: String(payment.payment_link || `https://payment.aulaa.co/pay/${payment.id}`),
-      payment_number: payment.payment_number ?? null, redirect_url: null,
+      payment_link: paymentLink,
+      payment_number: payment.payment_number ?? null, redirect_url: redirectUrl,
       expired_at: payment.expired_at ?? null, paid_at: payment.paid_at ?? null, created_at: payment.created_at ?? null
     };
     const { error } = await supabase.rpc('persist_aulaa_payment', { p_order_id: orderId, p_payment: record });
