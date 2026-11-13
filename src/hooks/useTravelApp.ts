@@ -686,6 +686,7 @@ export function useTravelApp() {
         });
 
         if (!result.accessToken) throw new Error('Token akses booking tidak diterbitkan.');
+        if (result.booking) Object.assign(newBooking, result.booking);
         newBooking.accessToken = result.accessToken;
         if (result.transaction) newBooking.aulaaTransaction = result.transaction;
         if (result.paymentError) showToast(result.paymentError.message, 'warning');
