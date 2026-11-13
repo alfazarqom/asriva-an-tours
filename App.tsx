@@ -484,6 +484,8 @@ export function App() {
               bookings={app.bookings}
               isCheckingAulaaStatus={app.isCheckingAulaaStatus}
               isCancellingAulaa={app.isCancellingAulaa}
+              isRetryingAulaaPayment={app.isRetryingAulaaPayment}
+              onRetryAulaaPayment={app.handleRetryAulaaPayment}
               onRefreshAulaaStatus={app.handleRefreshAulaaStatus}
               onBack={() => app.goBack('/trips')}
               onFallbackToBookings={() => navigate('/trips', { replace: true })}
