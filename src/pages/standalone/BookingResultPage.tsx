@@ -15,6 +15,8 @@ export interface BookingResultPageProps {
   bookings: Booking[];
   isCheckingAulaaStatus?: boolean;
   isCancellingAulaa?: boolean;
+  isRetryingAulaaPayment?: boolean;
+  onRetryAulaaPayment?: (bookingReference: string) => void;
   onRefreshAulaaStatus?: (bookingReference: string) => void;
   onBack: () => void;
   onFallbackToBookings: () => void;
@@ -31,6 +33,8 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
   bookings,
   isCheckingAulaaStatus = false,
   isCancellingAulaa = false,
+  isRetryingAulaaPayment = false,
+  onRetryAulaaPayment,
   onRefreshAulaaStatus,
   onBack,
   onFallbackToBookings,
@@ -138,6 +142,20 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
             ? 'Selesaikan pembayaran melalui halaman checkout Aulaa atau instruksi di bawah ini, lalu cek status transaksi secara berkala.'
             : `Cantumkan kode ${booking.bookingReference} saat menyelesaikan pembayaran bersama ASRIVA Travel & Tours.`}
         </AlertBanner>
+
+        {!booking.aulaaTransaction && booking.paymentMethodId === 'aulaa_all' && booking.accessToken && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs text-amber-900">Invoice Aulaa belum tersimpan. Anda dapat mencoba memulihkan invoice menggunakan Kode Booking yang sama tanpa membuat pesanan baru.</p>
+            <button
+              type="button"
+              disabled={isRetryingAulaaPayment}
+              onClick={() => onRetryAulaaPayment?.(booking.bookingReference)}
+              className="w-full rounded-xl bg-[#0B2545] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {isRetryingAulaaPayment ? 'Memulihkan invoice...' : 'Coba Pulihkan Invoice Aulaa'}
+            </button>
+          </div>
+        )}
 
         {booking.aulaaTransaction && (
           <AulaaPaymentBox
