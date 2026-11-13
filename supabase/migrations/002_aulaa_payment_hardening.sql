@@ -232,8 +232,20 @@ begin
     payment_number=excluded.payment_number,currency=excluded.currency,country_code=excluded.country_code,
     expires_at=excluded.expires_at,paid_at=excluded.paid_at,raw_response=excluded.raw_response;
   update public.bookings set payment_create_state='created',
-    booking_status='Menunggu Pembayaran (Aulaa)',
-    payment_status='Belum Dibayar - Menunggu Pembayaran'
+    trip_category=case when p_payment->>'status'='paid' then 'upcoming' when p_payment->>'status' in ('expired','cancelled','refunded') then 'cancelled' else trip_category end,
+    booking_status=case p_payment->>'status'
+      when 'paid' then 'Terkonfirmasi - Lunas'
+      when 'expired' then 'Kadaluarsa'
+      when 'cancelled' then 'Dibatalkan'
+      when 'refunded' then 'Dana Dikembalikan'
+      else 'Menunggu Pembayaran (Aulaa)' end,
+    payment_status=case p_payment->>'status'
+      when 'paid' then 'Lunas (Terverifikasi)'
+      when 'expired' then 'Kadaluarsa (Melewati Batas Waktu)'
+      when 'cancelled' then 'Dibatalkan'
+      when 'refunded' then 'Dana Dikembalikan'
+      when 'failed' then 'Pembayaran Gagal'
+      else 'Belum Dibayar - Menunggu Pembayaran' end
     where booking_reference=p_order_id;
 end;
 $$;
@@ -272,6 +284,7 @@ begin
     raise exception using errcode='22023',message='payment_amount_or_currency_mismatch';
   end if;
   if v_status='pending' and v_tx.status <> 'pending'
+    or v_status='refunded' and v_tx.status <> 'paid'
     or v_tx.status='refunded' and v_status <> 'refunded'
     or v_tx.status='paid' and v_status in ('pending','failed','expired','cancelled') then
     update public.aulaa_webhook_events set processing_error='stale_or_invalid_transition',processed_at=now() where id=v_event_id;
