@@ -198,7 +198,9 @@ export async function saveBookingReviewInSupabase(
     return;
   }
 
-  await supabase.functions.invoke('bookings-lookup', {
+  const { data, error } = await supabase.functions.invoke('bookings-lookup', {
     body: { action: 'save_review', bookingReference, review, accessToken }
   });
+  if (error) throw await extractFunctionError(error);
+  if (data?.error?.message) throw new AulaaGatewayException(data.error.message, data.error.code || 'review_save_failed');
 }
