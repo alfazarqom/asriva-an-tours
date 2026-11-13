@@ -1,190 +1,67 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-type AulaaStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
+const corsHeaders = { 'Content-Type': 'application/json' };
+const allowedStatuses = new Set(['pending','paid','expired','cancelled','failed','refunded']);
 
-interface AulaaWebhookPayload {
-  id?: string;
-  order_id: string;
-  amount: number;
-  fee_amount?: number;
-  total_amount?: number;
-  currency?: string;
-  country_code?: string;
-  status: AulaaStatus;
-  payment_method?: string;
-  paid_at?: string | null;
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: corsHeaders });
 }
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
+function hexToBytes(value: string): Uint8Array | null {
+  if (!/^[a-f0-9]{64}$/i.test(value)) return null;
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) bytes[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
 }
-
-function getAulaaWebhookSecret(): string {
-  const secret = Deno.env.get('AULAA_WEBHOOK_SECRET')?.trim();
-  if (!secret) {
-    throw new Error('AULAA_WEBHOOK_SECRET belum dikonfigurasi pada Supabase Edge Function Secrets.');
-  }
-  return secret;
+async function verifySignature(rawBody: string, header: string | null, secret: string) {
+  if (!header) return false;
+  const signature = hexToBytes(header.trim().replace(/^sha256=/i, ''));
+  if (!signature) return false;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+  return crypto.subtle.verify('HMAC', key, signature, new TextEncoder().encode(rawBody));
 }
-
-function getSupabaseAdmin() {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY tidak tersedia.');
-  }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false }
-  });
-}
-
-function mapAulaaStatusToBookingState(status: AulaaStatus): {
-  trip_category: 'upcoming' | 'cancelled';
-  booking_status: string;
-  payment_status: string;
-} {
-  switch (status) {
-    case 'paid':
-      return {
-        trip_category: 'upcoming',
-        booking_status: 'Terkonfirmasi - Lunas',
-        payment_status: 'Lunas (Terverifikasi)'
-      };
-    case 'expired':
-      return {
-        trip_category: 'cancelled',
-        booking_status: 'Kadaluarsa',
-        payment_status: 'Kadaluarsa (Melewati Batas Waktu)'
-      };
-    case 'cancelled':
-      return {
-        trip_category: 'cancelled',
-        booking_status: 'Dibatalkan',
-        payment_status: 'Dibatalkan'
-      };
-    case 'failed':
-      return {
-        trip_category: 'upcoming',
-        booking_status: 'Menunggu Pembayaran (Aulaa)',
-        payment_status: 'Pembayaran Gagal'
-      };
-    case 'pending':
-    default:
-      return {
-        trip_category: 'upcoming',
-        booking_status: 'Menunggu Pembayaran (Aulaa)',
-        payment_status: 'Belum Dibayar - Menunggu Pembayaran'
-      };
-  }
-}
-
-async function verifyAulaaWebhookSignature(
-  rawBody: string,
-  signatureHeader: string | null,
-  webhookSecret: string
-): Promise<boolean> {
-  if (!signatureHeader) {
-    return false;
-  }
-
-  const normalizedSig = signatureHeader.trim().toLowerCase();
-  const encoder = new TextEncoder();
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(webhookSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  const signatureBytes = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(rawBody));
-  const expectedHex = Array.from(new Uint8Array(signatureBytes))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-
-  if (normalizedSig.length !== expectedHex.length) {
-    return false;
-  }
-
-  let diff = 0;
-  for (let i = 0; i < normalizedSig.length; i++) {
-    diff |= normalizedSig.charCodeAt(i) ^ expectedHex.charCodeAt(i);
-  }
-  return diff === 0;
+async function sha256(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'GET') {
-    return jsonResponse({ ok: true, service: 'ASRIVA Aulaa v1 Webhook' }, 200);
-  }
-
-  if (req.method !== 'POST') {
-    return jsonResponse({ error: { code: 'method_not_allowed', message: 'Method harus POST.' } }, 405);
-  }
-
+  if (req.method !== 'POST') return jsonResponse({ error: { code: 'method_not_allowed' } }, 405);
   try {
-    const webhookSecret = getAulaaWebhookSecret();
+    const secret = Deno.env.get('AULAA_WEBHOOK_SECRET')?.trim();
+    const url = Deno.env.get('SUPABASE_URL')?.trim();
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+    if (!secret || !url || !serviceKey) return jsonResponse({ error: { code: 'configuration_error' } }, 500);
+
     const rawBody = await req.text();
-    const signature = req.headers.get('x-webhook-signature');
+    if (!rawBody || rawBody.length > 65536) return jsonResponse({ error: { code: 'invalid_payload' } }, 413);
+    const valid = await verifySignature(rawBody, req.headers.get('x-webhook-signature'), secret);
+    if (!valid) return jsonResponse({ error: { code: 'unauthorized', message: 'Invalid X-Webhook-Signature' } }, 401);
 
-    const isValidSignature = await verifyAulaaWebhookSignature(rawBody, signature, webhookSecret);
-    if (!isValidSignature) {
-      return jsonResponse({ error: { code: 'unauthorized', message: 'Invalid X-Webhook-Signature' } }, 401);
+    let payload: Record<string, unknown>;
+    try { payload = JSON.parse(rawBody) as Record<string, unknown>; }
+    catch { return jsonResponse({ error: { code: 'invalid_json' } }, 400); }
+
+    const orderId = typeof payload.order_id === 'string' ? payload.order_id.trim() : '';
+    const paymentId = typeof payload.id === 'string' ? payload.id : '';
+    const status = typeof payload.status === 'string' ? payload.status : '';
+    const amount = payload.amount;
+    if (!orderId || !paymentId || !/^[0-9a-f-]{36}$/i.test(paymentId) ||
+      !allowedStatuses.has(status) || !Number.isSafeInteger(amount) || Number(amount) < 1000) {
+      return jsonResponse({ error: { code: 'invalid_payload' } }, 400);
     }
 
-    const payload = JSON.parse(rawBody) as AulaaWebhookPayload;
-    const orderId = payload?.order_id;
-    const nextStatus = payload?.status;
-
-    if (!orderId || !nextStatus) {
-      return jsonResponse(
-        { error: { code: 'invalid_request', message: 'Payload webhook Aulaa tidak valid.' } },
-        400
-      );
-    }
-
-    const supabase = getSupabaseAdmin();
-    const mapped = mapAulaaStatusToBookingState(nextStatus);
-
-    const txUpdate: Record<string, unknown> = {
-      status: nextStatus
-    };
-    if (payload.payment_method) txUpdate.payment_method = payload.payment_method;
-    if (typeof payload.fee_amount === 'number') txUpdate.fee_amount = payload.fee_amount;
-    if (typeof payload.total_amount === 'number') txUpdate.total_amount = payload.total_amount;
-    if (payload.paid_at !== undefined) {
-      txUpdate.paid_at = payload.paid_at;
-    } else if (nextStatus === 'paid') {
-      txUpdate.paid_at = new Date().toISOString();
-    }
-
-    await supabase.from('aulaa_transactions').update(txUpdate).eq('order_id', orderId);
-
-    await supabase
-      .from('bookings')
-      .update({
-        trip_category: mapped.trip_category,
-        booking_status: mapped.booking_status,
-        payment_status: mapped.payment_status
-      })
-      .eq('booking_reference', orderId);
-
-    await supabase.from('aulaa_webhook_events').insert({
-      order_id: orderId,
-      status: nextStatus,
-      payment_method: payload.payment_method ?? null,
-      amount: typeof payload.amount === 'number' ? Math.round(payload.amount) : null,
-      payload
+    const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
+    const fingerprint = await sha256(rawBody);
+    const { data, error } = await supabase.rpc('process_aulaa_webhook', {
+      p_payload: payload,
+      p_event_fingerprint: fingerprint
     });
-
-    return jsonResponse({ received: true, order_id: orderId, status: nextStatus }, 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Webhook processing failed';
-    return jsonResponse({ error: { code: 'internal_error', message } }, 500);
+    if (error) {
+      // Non-2xx lets Aulaa retry; do not acknowledge a database failure.
+      return jsonResponse({ error: { code: 'processing_failed', message: 'Webhook belum dapat diproses.' } }, 500);
+    }
+    return jsonResponse({ received: true, order_id: orderId, result: data }, 200);
+  } catch {
+    return jsonResponse({ error: { code: 'internal_error' } }, 500);
   }
 });
