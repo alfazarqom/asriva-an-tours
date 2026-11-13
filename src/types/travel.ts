@@ -133,7 +133,7 @@ export interface GuestInformation {
 }
 
 export type AulaaMethodType = 'qr_code' | 'virtual_account' | 'card' | 'ewallet' | 'retail' | string;
-export type AulaaTransactionStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
+export type AulaaTransactionStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed' | 'refunded';
 
 export interface AulaaPaymentMethod {
   code: string;
@@ -213,13 +213,16 @@ export interface Booking {
     | 'Terkonfirmasi - Lunas'
     | 'Kadaluarsa'
     | 'Selesai'
-    | 'Dibatalkan';
+    | 'Dibatalkan'
+    | 'Dana Dikembalikan';
   paymentStatus:
     | 'Belum Dibayar - Menunggu Pembayaran'
     | 'Lunas (Terverifikasi)'
     | 'Kadaluarsa (Melewati Batas Waktu)'
     | 'Pembayaran Gagal'
-    | 'Dibatalkan';
+    | 'Dibatalkan'
+    | 'Dana Dikembalikan';
+  accessToken?: string;
   aulaaTransaction?: AulaaTransaction;
   review?: BookingReview;
 }
