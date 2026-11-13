@@ -282,6 +282,7 @@ begin
       when 'expired' then 'Kadaluarsa'
       when 'cancelled' then 'Dibatalkan'
       when 'refunded' then 'Dana Dikembalikan'
+      when 'failed' then 'Pembayaran Gagal'
       else 'Menunggu Pembayaran (Aulaa)' end,
     payment_status=case p_payment->>'status'
       when 'paid' then 'Lunas (Terverifikasi)'
