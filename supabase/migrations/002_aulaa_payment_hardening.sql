@@ -213,7 +213,7 @@ begin
   ) values (
     v_ref, v_pkg.package_id, v_pkg.package_name, v_opt->>'name', v_pkg.destination, v_pkg.duration, v_pkg.package_image,
     v_guest, v_travelers, v_departure::text, v_pkg.meeting_point, v_pkg.departure_location,
-    v_adults,v_children,v_infants,v_subtotal,v_discount_total,v_promo_discount,v_promo,v_service_fee,v_total,
+    v_adults,v_children,v_infants,v_base_subtotal,v_discount_total,v_promo_discount,v_promo,v_service_fee,v_total,
     nullif(p_booking->>'specialRequest',''), p_booking->>'paymentMethodId',
     coalesce(p_booking->>'paymentMethodName','Aulaa'), 'upcoming',
     case p_booking->>'paymentMethodId'
@@ -225,7 +225,7 @@ begin
   return jsonb_build_object(
     'bookingReference',v_ref,'packageName',v_pkg.package_name,'destination',v_pkg.destination,
     'duration',v_pkg.duration,'packageImage',v_pkg.package_image,'optionName',v_opt->>'name',
-    'subtotal',v_subtotal,'discountTotal',v_discount_total,'promoDiscount',v_promo_discount,
+    'subtotal',v_base_subtotal,'discountTotal',v_discount_total,'promoDiscount',v_promo_discount,
     'promoCodeApplied',v_promo,'serviceFee',v_service_fee,'totalAmount',v_total
   );
 end;
