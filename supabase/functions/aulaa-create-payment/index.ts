@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createAdminClient, consumeRateLimit, getRequestIp } from '../_shared/security.ts';
 
 const AULAA_API_BASE = 'https://api.aulaa.co/v1';
 const corsHeaders: Record<string, string> = {
@@ -10,12 +10,6 @@ type AulaaStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed' | 're
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-}
-function getAdmin() {
-  const url = Deno.env.get('SUPABASE_URL')?.trim();
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
-  if (!url || !key) throw new Error('Supabase server configuration is incomplete.');
-  return createClient(url, key, { auth: { persistSession: false } });
 }
 function getAulaaApiKey() {
   const key = Deno.env.get('AULAA_API_KEY')?.trim();
@@ -58,10 +52,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: { code: 'invalid_payment_method', message: 'Konfigurasi metode pembayaran tidak sesuai.' } }, 400);
     }
 
+    const supabase = createAdminClient();
+    if (!(await consumeRateLimit(supabase, `checkout-ip:${getRequestIp(req)}`, 8, 60))) {
+      return jsonResponse({ error: { code: 'rate_limited', message: 'Terlalu banyak percobaan checkout. Coba lagi dalam satu menit.' } }, 429);
+    }
     const accessToken = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
     const accessTokenHash = await sha256(accessToken);
     const idempotencyKey = await sha256(`guest-booking:${bookingReference}`);
-    const supabase = getAdmin();
     const bookingInput = { ...booking, bookingReference, optionId };
     const { data: created, error: createError } = await supabase.rpc('create_guest_booking', {
       p_booking: bookingInput, p_access_token_hash: accessTokenHash, p_idempotency_key: idempotencyKey
