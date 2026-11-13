@@ -82,7 +82,7 @@ export interface CreateAulaaBookingParams {
 
 export async function createBookingWithAulaa(
   params: CreateAulaaBookingParams & { optionId: string }
-): Promise<{ bookingReference: string; accessToken: string; transaction: AulaaTransaction | null; paymentError?: { code: string; message: string } }> {
+): Promise<{ bookingReference: string; accessToken: string; booking?: Partial<Booking>; transaction: AulaaTransaction | null; paymentError?: { code: string; message: string } }> {
   if (!isSupabaseConfigured() || !supabase) {
     throw new AulaaGatewayException(
       'Konfigurasi Supabase (VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur.',
@@ -104,6 +104,7 @@ export async function createBookingWithAulaa(
   return {
     bookingReference: data?.bookingReference || params.booking.bookingReference,
     accessToken: String(data?.accessToken || ''),
+    booking: data?.booking as Partial<Booking> | undefined,
     transaction: (data?.transaction as AulaaTransaction | null) ?? null,
     paymentError: data?.paymentError
   };
