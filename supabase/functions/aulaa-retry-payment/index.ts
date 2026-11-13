@@ -1,4 +1,4 @@
-import { createAdminClient, verifyBookingAccess } from '../_shared/security.ts';
+import { createAdminClient, consumeRateLimit, verifyBookingAccess } from '../_shared/security.ts';
 
 const AULAA_API_BASE = 'https://api.aulaa.co/v1';
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -19,6 +19,7 @@ Deno.serve(async (req: Request) => {
     if (!orderId || !accessToken) return jsonResponse({ error: { code: 'invalid_request' } }, 400);
     const supabase = createAdminClient();
     if (!(await verifyBookingAccess(supabase, orderId, accessToken))) return jsonResponse({ error: { code: 'not_found' } }, 404);
+    if (!(await consumeRateLimit(supabase, `retry:${orderId}:${accessToken}`, 5, 60))) return jsonResponse({ error: { code: 'rate_limited', message: 'Terlalu banyak permintaan pemulihan invoice.' } }, 429);
     const { data: booking, error: bookingError } = await supabase.from('bookings')
       .select('total_amount,payment_method_id,payment_method_name')
       .eq('booking_reference', orderId).maybeSingle();
