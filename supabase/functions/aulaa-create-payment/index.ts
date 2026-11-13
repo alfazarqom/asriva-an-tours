@@ -80,10 +80,17 @@ Deno.serve(async (req: Request) => {
       if (requestedMethod) aulaaPayload.payment_method = requestedMethod;
       if (redirectUrl) aulaaPayload.redirect_url = redirectUrl;
 
-      let upstream = await fetch(`${AULAA_API_BASE}/payments`, {
+      const createRequest = () => fetch(`${AULAA_API_BASE}/payments`, {
         method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(aulaaPayload), signal: AbortSignal.timeout(15000)
       });
+      let upstream: Response;
+      try {
+        upstream = await createRequest();
+      } catch {
+        // Retry exactly once with the same provider order_id; Aulaa returns 409 + payment_id if the first call succeeded.
+        upstream = await createRequest();
+      }
       let upstreamJson = await parseAulaaResponse(upstream);
       let payment = unwrap(upstreamJson);
 
