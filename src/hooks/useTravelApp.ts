@@ -548,7 +548,9 @@ export function useTravelApp() {
                       ? 'Pembayaran Gagal'
                       : nextStatus === 'cancelled'
                         ? 'Dibatalkan'
-                        : 'Belum Dibayar - Menunggu Pembayaran';
+                        : nextStatus === 'refunded'
+                          ? 'Dana Dikembalikan'
+                          : 'Belum Dibayar - Menunggu Pembayaran';
 
               const nextBookingStatus: Booking['bookingStatus'] =
                 nextStatus === 'paid'
@@ -557,14 +559,14 @@ export function useTravelApp() {
                     ? 'Kadaluarsa'
                     : nextStatus === 'cancelled'
                       ? 'Dibatalkan'
-                      : tx.status === 'refunded'
-                      ? 'Dana Dikembalikan'
-                      : 'Menunggu Pembayaran (Aulaa)';
+                      : nextStatus === 'refunded'
+                        ? 'Dana Dikembalikan'
+                        : 'Menunggu Pembayaran (Aulaa)';
 
               return {
                 ...b,
                 tripCategory:
-                  nextStatus === 'cancelled' || nextStatus === 'expired' ? 'cancelled' : b.tripCategory,
+                  nextStatus === 'cancelled' || nextStatus === 'expired' || nextStatus === 'refunded' ? 'cancelled' : b.tripCategory,
                 bookingStatus: nextBookingStatus,
                 paymentStatus: nextPaymentStatus,
                 aulaaTransaction: b.aulaaTransaction
