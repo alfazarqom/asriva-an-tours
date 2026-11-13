@@ -744,7 +744,9 @@ export function useTravelApp() {
                     ? 'Pembayaran Gagal'
                     : tx.status === 'cancelled'
                       ? 'Dibatalkan'
-                      : 'Belum Dibayar - Menunggu Pembayaran';
+                      : tx.status === 'refunded'
+                        ? 'Dana Dikembalikan'
+                        : 'Belum Dibayar - Menunggu Pembayaran';
 
             const nextBookingStatus: Booking['bookingStatus'] =
               tx.status === 'paid'
@@ -753,7 +755,9 @@ export function useTravelApp() {
                   ? 'Kadaluarsa'
                   : tx.status === 'cancelled'
                     ? 'Dibatalkan'
-                    : 'Menunggu Pembayaran (Aulaa)';
+                    : tx.status === 'refunded'
+                      ? 'Dana Dikembalikan'
+                      : 'Menunggu Pembayaran (Aulaa)';
 
             return {
               ...b,
@@ -773,7 +777,7 @@ export function useTravelApp() {
         setIsCheckingAulaaStatus(false);
       }
     },
-    [isCheckingAulaaStatus, showToast]
+    [bookings, isCheckingAulaaStatus, showToast]
   );
 
   const handleCancelBooking = useCallback(
