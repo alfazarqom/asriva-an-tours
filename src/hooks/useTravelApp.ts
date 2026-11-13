@@ -136,6 +136,7 @@ export function useTravelApp() {
   const [tripSubTab, setTripSubTab] = useState<TripSubTab>('upcoming');
   const [lookupRef, setLookupRef] = useState<string>('');
   const [lookupContact, setLookupContact] = useState<string>('');
+  const [lookupAccessToken, setLookupAccessToken] = useState<string>('');
   const [lookupError, setLookupError] = useState<string>('');
   const [verifiedBookingRefs, setVerifiedBookingRefs] = useState<string[]>(INITIAL_VERIFIED_BOOKING_REFS);
   const [reviewBookingRef, setReviewBookingRef] = useState<string | null>(null);
@@ -556,6 +557,8 @@ export function useTravelApp() {
                     ? 'Kadaluarsa'
                     : nextStatus === 'cancelled'
                       ? 'Dibatalkan'
+                      : tx.status === 'refunded'
+                      ? 'Dana Dikembalikan'
                       : 'Menunggu Pembayaran (Aulaa)';
 
               return {
@@ -668,6 +671,7 @@ export function useTravelApp() {
       if (isAulaaChannel || isSupabaseConfigured()) {
         const result = await createBookingWithAulaa({
           booking: newBooking,
+          optionId: bookingDraft.optionId,
           aulaa: isAulaaChannel
             ? {
                 paymentMethod:
@@ -681,9 +685,10 @@ export function useTravelApp() {
             : undefined
         });
 
-        if (result.transaction) {
-          newBooking.aulaaTransaction = result.transaction;
-        }
+        if (!result.accessToken) throw new Error('Token akses booking tidak diterbitkan.');
+        newBooking.accessToken = result.accessToken;
+        if (result.transaction) newBooking.aulaaTransaction = result.transaction;
+        if (result.paymentError) showToast(result.paymentError.message, 'warning');
       }
 
       setBookings((prev) => [newBooking, ...prev]);
@@ -724,7 +729,9 @@ export function useTravelApp() {
       if (isCheckingAulaaStatus) return;
       setIsCheckingAulaaStatus(true);
       try {
-        const tx: AulaaTransaction = await refreshAulaaPaymentStatus(bookingReference);
+        const target = bookings.find((b) => b.bookingReference === bookingReference);
+        if (!target?.accessToken) throw new AulaaGatewayException('Token akses booking diperlukan. Cari booking kembali menggunakan token Anda.');
+        const tx: AulaaTransaction = await refreshAulaaPaymentStatus(bookingReference, target.accessToken);
         setBookings((prev) =>
           prev.map((b) => {
             if (b.bookingReference !== bookingReference) return b;
@@ -751,7 +758,7 @@ export function useTravelApp() {
             return {
               ...b,
               tripCategory:
-                tx.status === 'cancelled' || tx.status === 'expired' ? 'cancelled' : b.tripCategory,
+                tx.status === 'cancelled' || tx.status === 'expired' || tx.status === 'refunded' ? 'cancelled' : b.tripCategory,
               bookingStatus: nextBookingStatus,
               paymentStatus: nextPaymentStatus,
               aulaaTransaction: tx
@@ -777,7 +784,8 @@ export function useTravelApp() {
       if (hasAulaaTx && isSupabaseConfigured()) {
         setIsCancellingAulaa(true);
         try {
-          const result = await cancelAulaaPayment(bookingReference);
+          if (!target?.accessToken) throw new AulaaGatewayException('Token akses booking diperlukan.');
+          const result = await cancelAulaaPayment(bookingReference, target.accessToken);
           setBookings((prev) =>
             prev.map((b) =>
               b.bookingReference === bookingReference
@@ -828,8 +836,9 @@ export function useTravelApp() {
       const refInput = lookupRef.trim().toUpperCase();
       const contactInput = lookupContact.trim().toLowerCase();
 
-      if (!refInput || !contactInput) {
-        setLookupError('Masukkan Kode Booking serta Email atau Nomor Telepon yang terdaftar.');
+      const tokenInput = lookupAccessToken.trim();
+      if (!refInput || !contactInput || !tokenInput) {
+        setLookupError('Masukkan Kode Booking, email/telepon, dan Token Akses Booking.');
         return;
       }
 
@@ -839,12 +848,13 @@ export function useTravelApp() {
         const phoneClean = b.guest.phone.replace(/[\s\-()+]/g, '');
         const inputPhoneClean = contactInput.replace(/[\s\-()+]/g, '');
         const phoneMatches = inputPhoneClean.length >= 6 && phoneClean === inputPhoneClean;
-        return refMatches && (emailMatches || phoneMatches);
+        return refMatches && (emailMatches || phoneMatches) && b.accessToken === tokenInput;
       });
 
       if (!found && isSupabaseConfigured()) {
-        const remoteBooking = await lookupBookingInSupabase(refInput, contactInput);
+        const remoteBooking = await lookupBookingInSupabase(refInput, contactInput, tokenInput);
         if (remoteBooking) {
+          remoteBooking.accessToken = tokenInput;
           found = remoteBooking;
           setBookings((prev) =>
             prev.some((b) => b.bookingReference === remoteBooking.bookingReference)
@@ -867,7 +877,7 @@ export function useTravelApp() {
       setTripSubTab(found.tripCategory);
       showToast('Pemesanan berhasil diverifikasi.', 'success');
     },
-    [bookings, lookupContact, lookupRef, showToast]
+    [bookings, lookupAccessToken, lookupContact, lookupRef, showToast]
   );
 
   const clearFieldError = useCallback((field: string) => {
@@ -892,6 +902,8 @@ export function useTravelApp() {
 
   const handleSubmitReview = useCallback(
     (bookingReference: string, review: BookingReview) => {
+      const target = bookings.find((b) => b.bookingReference === bookingReference);
+      if (!target?.accessToken) { showToast('Token akses booking diperlukan untuk menyimpan ulasan.', 'error'); return; }
       setBookings((prev) =>
         prev.map((b) =>
           b.bookingReference === bookingReference
@@ -902,10 +914,10 @@ export function useTravelApp() {
             : b
         )
       );
-      void saveBookingReviewInSupabase(bookingReference, review);
+      void saveBookingReviewInSupabase(bookingReference, review, target.accessToken);
       showToast('Terima kasih! Ulasan perjalanan Anda berhasil disimpan.', 'success');
     },
-    [showToast]
+    [bookings, showToast]
   );
 
   return {
@@ -968,6 +980,8 @@ export function useTravelApp() {
     setLookupRef,
     lookupContact,
     setLookupContact,
+    lookupAccessToken,
+    setLookupAccessToken,
     lookupError,
     verifiedBookingRefs,
     legalModal,
