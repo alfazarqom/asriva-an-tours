@@ -16,6 +16,8 @@ export interface MyTripsPageProps {
   onChangeLookupRef: (value: string) => void;
   lookupContact: string;
   onChangeLookupContact: (value: string) => void;
+  lookupAccessToken: string;
+  onChangeLookupAccessToken: (value: string) => void;
   lookupError: string;
   onLookupBooking: (e: React.FormEvent) => void;
   onOpenBookingDetail: (bookingReference: string) => void;
@@ -38,6 +40,8 @@ export const MyTripsPage: React.FC<MyTripsPageProps> = ({
   onChangeLookupRef,
   lookupContact,
   onChangeLookupContact,
+  lookupAccessToken,
+  onChangeLookupAccessToken,
   lookupError,
   onLookupBooking,
   onOpenBookingDetail,
@@ -224,7 +228,7 @@ export const MyTripsPage: React.FC<MyTripsPageProps> = ({
         <div>
           <h3 className="text-sm font-bold text-slate-900">Cari Pemesanan Tamu</h3>
           <p className="text-[11px] text-slate-500">
-            Masukkan Kode Booking beserta Email atau Nomor Telepon yang digunakan saat checkout.
+            Masukkan Kode Booking, email/telepon pemesan, dan Token Akses Booking yang diberikan setelah checkout.
           </p>
         </div>
 
@@ -248,6 +252,19 @@ export const MyTripsPage: React.FC<MyTripsPageProps> = ({
             placeholder="Masukkan email atau nomor telepon saat pemesanan"
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#136F99]"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Token Akses Booking</label>
+          <input
+            type="password"
+            autoComplete="off"
+            value={lookupAccessToken}
+            onChange={(e) => onChangeLookupAccessToken(e.target.value)}
+            placeholder="Tempel token akses 256-bit Anda"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-[#136F99]"
+          />
+          <p className="text-[10px] text-slate-500 mt-1">Token ini berfungsi sebagai kunci privat untuk melihat dan mengelola reservasi.</p>
         </div>
 
         {lookupError && <AlertBanner type="error">{lookupError}</AlertBanner>}
