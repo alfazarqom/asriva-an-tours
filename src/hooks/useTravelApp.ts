@@ -939,21 +939,19 @@ export function useTravelApp() {
   );
 
   const handleSubmitReview = useCallback(
-    (bookingReference: string, review: BookingReview) => {
+    async (bookingReference: string, review: BookingReview) => {
       const target = bookings.find((b) => b.bookingReference === bookingReference);
-      if (!target?.accessToken) { showToast('Token akses booking diperlukan untuk menyimpan ulasan.', 'error'); return; }
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.bookingReference === bookingReference
-            ? {
-                ...b,
-                review
-              }
-            : b
-        )
-      );
-      void saveBookingReviewInSupabase(bookingReference, review, target.accessToken);
-      showToast('Terima kasih! Ulasan perjalanan Anda berhasil disimpan.', 'success');
+      if (!target?.accessToken) {
+        showToast('Token akses booking diperlukan untuk menyimpan ulasan.', 'error');
+        return;
+      }
+      try {
+        await saveBookingReviewInSupabase(bookingReference, review, target.accessToken);
+        setBookings((prev) => prev.map((b) => b.bookingReference === bookingReference ? { ...b, review } : b));
+        showToast('Terima kasih! Ulasan perjalanan Anda berhasil disimpan.', 'success');
+      } catch (err) {
+        showToast(err instanceof AulaaGatewayException ? err.message : 'Ulasan belum dapat disimpan.', 'error');
+      }
     },
     [bookings, showToast]
   );
