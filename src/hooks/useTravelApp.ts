@@ -696,6 +696,7 @@ export function useTravelApp() {
       setVerifiedBookingRefs((prev) => (prev.includes(reference) ? prev : [reference, ...prev]));
       setLookupRef(reference);
       setLookupContact(guestInfo.email.trim());
+      setLookupAccessToken(newBooking.accessToken || '');
       navigate(`/booking/confirmed/${reference}`, { replace: true });
       showToast(`Pemesanan ${reference} berhasil dibuat.`, 'success');
     } catch (err) {
