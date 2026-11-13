@@ -18,6 +18,9 @@ Configure these in the target Supabase project's Edge Function Secrets before de
 
 - `AULAA_API_KEY`
 - `AULAA_WEBHOOK_SECRET`
+- `APP_BASE_URL` (the trusted HTTPS origin of the ASRIVA application; used to construct redirect URLs server-side)
+
+The application origin must be an HTTPS URL. The backend ignores client-supplied redirect destinations and constructs the Aulaa redirect from this configured origin. Provider payment links are accepted only when their host is `payment.aulaa.co`.
 
 The hosted Edge Function runtime supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Do not place the service-role key in Vercel or browser environment variables.
 
@@ -58,4 +61,4 @@ If the merchant dashboard temporarily still points to the Vercel compatibility r
 
 ## Verification status
 
-The changes are committed to `feature/aulaa-payment-hardening`. No hosted migration or deployment has been run. Build/lint and live sandbox tests remain pending because this execution environment could not clone the repository or reach GitHub from the shell. The exact Aulaa webhook signature header/encoding must be confirmed with a current official sandbox sample before enabling the callback in production.
+The changes are committed to `feature/aulaa-payment-hardening`. No hosted migration or deployment has been run. Build/lint and live sandbox tests remain pending because this execution environment could not clone the repository or reach GitHub from the shell. The repository's prior implementation and the hardened handler use `X-Webhook-Signature` with a hex HMAC-SHA256 digest over the exact raw request body. Confirm this exact header/encoding with a current official Aulaa sandbox sample before enabling the callback in production.
