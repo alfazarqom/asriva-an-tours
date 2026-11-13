@@ -1,0 +1,4 @@
+project_id = "asriva-an-tours"
+
+[functions.aulaa-webhook]
+verify_jwt = false
