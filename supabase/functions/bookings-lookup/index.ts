@@ -1,4 +1,4 @@
-import { createAdminClient, hashAccessToken, verifyBookingAccess } from '../_shared/security.ts';
+import { createAdminClient, consumeRateLimit, hashAccessToken, verifyBookingAccess } from '../_shared/security.ts';
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 function jsonResponse(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }); }
 function normalizePhone(value: string) { return value.replace(/[^0-9]/g, ''); }
@@ -36,6 +36,7 @@ Deno.serve(async (req: Request) => {
     if (!bookingReference || !accessToken) return jsonResponse({ error: { code: 'invalid_request', message: 'Kode Booking dan token akses wajib diisi.' } }, 400);
     const supabase = createAdminClient();
     if (!(await verifyBookingAccess(supabase, bookingReference, accessToken))) return jsonResponse({ error: { code: 'not_found', message: 'Booking tidak ditemukan atau token akses tidak valid.' } }, 404);
+    if (!(await consumeRateLimit(supabase, `lookup:${bookingReference}:${accessToken}`, 10, 60))) return jsonResponse({ error: { code: 'rate_limited', message: 'Terlalu banyak permintaan lookup.' } }, 429);
 
     if (action === 'save_review') {
       const review = body.review as Record<string, unknown> | undefined;
