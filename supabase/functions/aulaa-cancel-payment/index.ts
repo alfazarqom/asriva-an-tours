@@ -16,6 +16,12 @@ Deno.serve(async (req: Request) => {
     if (!orderId || !accessToken) return jsonResponse({ error: { code: 'invalid_request', message: 'Kode booking dan token akses wajib diisi.' } }, 400);
     const supabase = createAdminClient();
     if (!(await verifyBookingAccess(supabase, orderId, accessToken))) return jsonResponse({ error: { code: 'not_found', message: 'Booking tidak ditemukan atau token akses tidak valid.' } }, 404);
+    const { data: booking, error: bookingError } = await supabase.from('bookings')
+      .select('payment_status,trip_category').eq('booking_reference', orderId).maybeSingle();
+    if (bookingError || !booking) return jsonResponse({ error: { code: 'database_error' } }, 500);
+    if (booking.payment_status === 'Lunas (Terverifikasi)' || booking.trip_category === 'completed') {
+      return jsonResponse({ error: { code: 'invalid_state', message: 'Booking yang sudah lunas atau selesai tidak dapat dibatalkan melalui endpoint ini.' } }, 409);
+    }
 
     const { data: tx, error: lookupError } = await supabase.from('aulaa_transactions').select('*').eq('order_id', orderId).maybeSingle();
     if (lookupError) return jsonResponse({ error: { code: 'database_error' } }, 500);
