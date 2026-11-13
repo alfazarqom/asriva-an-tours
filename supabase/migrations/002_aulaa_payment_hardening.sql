@@ -127,15 +127,15 @@ begin
   if jsonb_typeof(v_travelers) <> 'array' or jsonb_array_length(v_travelers) <> v_total_people then
     raise exception using errcode='22023', message='invalid_travelers';
   end if;
-  if (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Adult') <> v_adults
-    or (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Child') <> v_children
-    or (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Infant') <> v_infants then
+  if (select count(*) from jsonb_array_elements(v_travelers) as t(value) where t.value->>'type'='Adult') <> v_adults
+    or (select count(*) from jsonb_array_elements(v_travelers) as t(value) where t.value->>'type'='Child') <> v_children
+    or (select count(*) from jsonb_array_elements(v_travelers) as t(value) where t.value->>'type'='Infant') <> v_infants then
     raise exception using errcode='22023', message='traveler_type_count_mismatch';
   end if;
   if coalesce(p_booking->>'paymentMethodId','') not in ('aulaa_all','aulaa_direct','bank_transfer_verified','office_settlement') then
     raise exception using errcode='22023', message='invalid_payment_method';
   end if;
-  if exists(select 1 from jsonb_array_elements(v_travelers) t where length(trim(coalesce(t->>'fullName',''))) < 2) then
+  if exists(select 1 from jsonb_array_elements(v_travelers) as t(value) where length(trim(coalesce(t.value->>'fullName',''))) < 2) then
     raise exception using errcode='22023', message='traveler_name_required';
   end if;
 
