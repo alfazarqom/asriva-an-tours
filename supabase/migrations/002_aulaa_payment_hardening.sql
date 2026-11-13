@@ -53,6 +53,44 @@ alter table public.aulaa_webhook_events add column if not exists processing_erro
 create unique index if not exists aulaa_webhook_event_fingerprint_uidx
   on public.aulaa_webhook_events(event_fingerprint);
 
+create table if not exists public.aulaa_rate_limits (
+  key_hash text not null,
+  window_start timestamptz not null,
+  request_count integer not null default 1,
+  primary key (key_hash, window_start)
+);
+alter table public.aulaa_rate_limits enable row level security;
+revoke all on public.aulaa_rate_limits from anon, authenticated;
+grant select, insert, update, delete on public.aulaa_rate_limits to service_role;
+
+create or replace function public.consume_aulaa_rate_limit(p_key_hash text, p_window_seconds integer, p_max_requests integer)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  v_window timestamptz;
+  v_count integer;
+begin
+  if p_key_hash is null or length(p_key_hash) <> 64 or p_window_seconds < 1 or p_window_seconds > 86400
+    or p_max_requests < 1 or p_max_requests > 1000 then
+    raise exception using errcode='22023', message='invalid_rate_limit_parameters';
+  end if;
+  v_window := to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  insert into public.aulaa_rate_limits(key_hash,window_start,request_count)
+  values(p_key_hash,v_window,1)
+  on conflict(key_hash,window_start) do update
+    set request_count=public.aulaa_rate_limits.request_count+1
+  returning request_count into v_count;
+  delete from public.aulaa_rate_limits where window_start < now() - interval '2 days';
+  return v_count <= p_max_requests;
+end;
+$;
+
+revoke all on function public.consume_aulaa_rate_limit(text,integer,integer) from public,anon,authenticated;
+grant execute on function public.consume_aulaa_rate_limit(text,integer,integer) to service_role;
+
 alter table public.travel_package_pricing enable row level security;
 revoke all on public.travel_package_pricing from anon, authenticated;
 grant select on public.travel_package_pricing to service_role;
