@@ -59,6 +59,8 @@ create table if not exists public.aulaa_rate_limits (
   request_count integer not null default 1,
   primary key (key_hash, window_start)
 );
+create index if not exists aulaa_rate_limits_window_start_idx on public.aulaa_rate_limits(window_start);
+create index if not exists bookings_access_token_hash_idx on public.bookings(access_token_hash);
 alter table public.aulaa_rate_limits enable row level security;
 revoke all on public.aulaa_rate_limits from anon, authenticated;
 grant select, insert, update, delete on public.aulaa_rate_limits to service_role;
