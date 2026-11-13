@@ -927,6 +927,10 @@ export function useTravelApp() {
 
   const clearGuestSession = useCallback(() => {
     setGuestInfo({ fullName: '', email: '', phone: '', whatsapp: '' });
+    setLookupAccessToken('');
+    setLookupRef('');
+    setLookupContact('');
+    setBookings((prev) => prev.map((booking) => ({ ...booking, accessToken: undefined })));
     setVerifiedBookingRefs([]);
     showToast('Data sesi tamu telah dibersihkan.', 'info');
   }, [showToast]);
