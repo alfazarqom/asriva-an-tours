@@ -77,7 +77,11 @@ Deno.serve(async (req: Request) => {
     try {
       const apiKey = getAulaaApiKey();
       const requestedMethod = typeof aulaa.paymentMethod === 'string' ? aulaa.paymentMethod : undefined;
-      const redirectUrl = typeof aulaa.redirectUrl === 'string' ? aulaa.redirectUrl : undefined;
+      const appBaseUrl = Deno.env.get('APP_BASE_URL')?.trim();
+      if (!appBaseUrl) throw new Error('APP_BASE_URL is not configured.');
+      const appUrl = new URL(appBaseUrl);
+      if (appUrl.protocol !== 'https:') throw new Error('APP_BASE_URL must use HTTPS.');
+      const redirectUrl = new URL(`/booking/confirmed/${encodeURIComponent(bookingReference)}`, appUrl).toString();
       const expectedAmount = Number(resultBooking.totalAmount);
       const aulaaPayload: Record<string, unknown> = { order_id: bookingReference, amount: expectedAmount };
       if (requestedMethod) aulaaPayload.payment_method = requestedMethod;
@@ -124,13 +128,19 @@ Deno.serve(async (req: Request) => {
           paymentError: { code: 'aulaa_status_invalid', message: 'Status transaksi Aulaa tidak dikenal.' } }, 202);
       }
 
+      const paymentLink = String(payment.payment_link || `https://payment.aulaa.co/pay/${payment.id}`);
+      const paymentLinkUrl = new URL(paymentLink);
+      if (paymentLinkUrl.protocol !== 'https:' || paymentLinkUrl.hostname !== 'payment.aulaa.co') {
+        return jsonResponse({ bookingReference, accessToken, booking: resultBooking, transaction: null,
+          paymentError: { code: 'aulaa_payment_link_invalid', message: 'Tautan pembayaran Aulaa tidak menggunakan host resmi.' } }, 202);
+      }
       const paymentRecord = {
         id: String(payment.id), order_id: orderId, status, amount,
         fee_amount: Number(payment.fee_amount || 0), charged_amount: Number(payment.charged_amount ?? amount),
         currency, country_code: countryCode, payment_method: payment.payment_method ? String(payment.payment_method) : requestedMethod ?? null,
         payment_method_name: typeof aulaa.paymentMethodName === 'string' ? aulaa.paymentMethodName : null,
         payment_method_type: typeof aulaa.paymentMethodType === 'string' ? aulaa.paymentMethodType : null,
-        payment_link: String(payment.payment_link || `https://payment.aulaa.co/pay/${payment.id}`),
+        payment_link: paymentLink,
         payment_number: payment.payment_number ? String(payment.payment_number) : null,
         redirect_url: redirectUrl ?? null, expired_at: payment.expired_at ? String(payment.expired_at) : null,
         paid_at: payment.paid_at ? String(payment.paid_at) : null, created_at: payment.created_at ? String(payment.created_at) : null
