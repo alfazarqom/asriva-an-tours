@@ -1,2 +1,20 @@
 [functions.aulaa-webhook]
 verify_jwt = false
+
+[functions.aulaa-create-payment]
+verify_jwt = false
+
+[functions.aulaa-retry-payment]
+verify_jwt = false
+
+[functions.aulaa-payment-status]
+verify_jwt = false
+
+[functions.aulaa-cancel-payment]
+verify_jwt = false
+
+[functions.aulaa-payment-methods]
+verify_jwt = false
+
+[functions.bookings-lookup]
+verify_jwt = false
