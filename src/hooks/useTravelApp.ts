@@ -817,9 +817,7 @@ export function useTravelApp() {
   const handleCancelBooking = useCallback(
     async (bookingReference: string) => {
       const target = bookings.find((b) => b.bookingReference === bookingReference);
-      const hasAulaaTx = Boolean(target?.aulaaTransaction);
-
-      if (hasAulaaTx && isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && target?.accessToken) {
         setIsCancellingAulaa(true);
         try {
           if (!target?.accessToken) throw new AulaaGatewayException('Token akses booking diperlukan.');
