@@ -26,3 +26,26 @@ export async function verifyBookingAccess(
     .maybeSingle();
   return !error && Boolean(data);
 }
+
+export function getRequestIp(request: Request): string {
+  const direct = request.headers.get('cf-connecting-ip') || request.headers.get('x-real-ip');
+  if (direct) return direct.trim().slice(0, 128);
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return forwarded || 'unknown';
+}
+
+export async function consumeRateLimit(
+  supabase: ReturnType<typeof createAdminClient>,
+  key: string,
+  maxRequests: number,
+  windowSeconds = 60
+): Promise<boolean> {
+  const keyHash = await hashAccessToken(key);
+  const { data, error } = await supabase.rpc('consume_aulaa_rate_limit', {
+    p_key_hash: keyHash,
+    p_window_seconds: windowSeconds,
+    p_max_requests: maxRequests
+  });
+  if (error) throw new Error('Rate limit service unavailable.');
+  return data === true;
+}
