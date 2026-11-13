@@ -1,4 +1,4 @@
-import { createAdminClient, verifyBookingAccess } from '../_shared/security.ts';
+import { createAdminClient, consumeRateLimit, verifyBookingAccess } from '../_shared/security.ts';
 const AULAA_API_BASE = 'https://api.aulaa.co/v1';
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 function jsonResponse(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }); }
@@ -16,6 +16,7 @@ Deno.serve(async (req: Request) => {
     if (!orderId || !accessToken) return jsonResponse({ error: { code: 'invalid_request', message: 'Kode booking dan token akses wajib diisi.' } }, 400);
     const supabase = createAdminClient();
     if (!(await verifyBookingAccess(supabase, orderId, accessToken))) return jsonResponse({ error: { code: 'not_found', message: 'Booking tidak ditemukan atau token akses tidak valid.' } }, 404);
+    if (!(await consumeRateLimit(supabase, `status:${orderId}:${accessToken}`, 20, 60))) return jsonResponse({ error: { code: 'rate_limited', message: 'Terlalu banyak pemeriksaan status.' } }, 429);
     const { data: tx, error: lookupError } = await supabase.from('aulaa_transactions').select('*').eq('order_id', orderId).maybeSingle();
     if (lookupError) return jsonResponse({ error: { code: 'database_error' } }, 500);
     if (!tx) return jsonResponse({ error: { code: 'not_found', message: 'Invoice Aulaa belum tersedia.' } }, 404);
