@@ -127,6 +127,14 @@ begin
   if jsonb_typeof(v_travelers) <> 'array' or jsonb_array_length(v_travelers) <> v_total_people then
     raise exception using errcode='22023', message='invalid_travelers';
   end if;
+  if (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Adult') <> v_adults
+    or (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Child') <> v_children
+    or (select count(*) from jsonb_array_elements(v_travelers) t where t->>'type'='Infant') <> v_infants then
+    raise exception using errcode='22023', message='traveler_type_count_mismatch';
+  end if;
+  if coalesce(p_booking->>'paymentMethodId','') not in ('aulaa_all','aulaa_direct','bank_transfer_verified','office_settlement') then
+    raise exception using errcode='22023', message='invalid_payment_method';
+  end if;
   if exists(select 1 from jsonb_array_elements(v_travelers) t where length(trim(coalesce(t->>'fullName',''))) < 2) then
     raise exception using errcode='22023', message='traveler_name_required';
   end if;
@@ -168,8 +176,12 @@ begin
     v_ref, v_pkg.package_id, v_pkg.package_name, v_opt->>'name', v_pkg.destination, v_pkg.duration, v_pkg.package_image,
     v_guest, v_travelers, v_departure::text, v_pkg.meeting_point, v_pkg.departure_location,
     v_adults,v_children,v_infants,v_subtotal,v_discount_total,v_promo_discount,v_promo,v_service_fee,v_total,
-    nullif(p_booking->>'specialRequest',''), coalesce(p_booking->>'paymentMethodId','aulaa_all'),
-    coalesce(p_booking->>'paymentMethodName','Aulaa'), 'upcoming','Menunggu Pembayaran (Aulaa)',
+    nullif(p_booking->>'specialRequest',''), p_booking->>'paymentMethodId',
+    coalesce(p_booking->>'paymentMethodName','Aulaa'), 'upcoming',
+    case p_booking->>'paymentMethodId'
+      when 'office_settlement' then 'Terkonfirmasi - Slot Ditahan'
+      when 'bank_transfer_verified' then 'Menunggu Verifikasi Pembayaran'
+      else 'Menunggu Pembayaran (Aulaa)' end,
     'Belum Dibayar - Menunggu Pembayaran',p_access_token_hash,'created',p_idempotency_key
   );
   return jsonb_build_object(
@@ -268,6 +280,9 @@ begin
 
   update public.aulaa_transactions set status=v_status,
     payment_method=coalesce(p_payload->>'payment_method',payment_method),
+    fee_amount=coalesce(nullif(p_payload->>'fee_amount','')::int,fee_amount),
+    charged_amount=coalesce(nullif(p_payload->>'charged_amount','')::int,charged_amount),
+    total_amount=coalesce(nullif(p_payload->>'charged_amount','')::int,total_amount),
     paid_at=case when v_status='paid' then coalesce(nullif(p_payload->>'paid_at','')::timestamptz,paid_at,now()) else paid_at end,
     refunded_at=case when v_status='refunded' then now() else refunded_at end
     where order_id=v_order;
