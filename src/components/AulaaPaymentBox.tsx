@@ -32,7 +32,8 @@ const STATUS_DISPLAY: Record<
   paid: { label: 'Berhasil / Lunas (paid)', variant: 'success' },
   expired: { label: 'Kadaluarsa (expired)', variant: 'error' },
   failed: { label: 'Gagal (failed)', variant: 'error' },
-  cancelled: { label: 'Dibatalkan (cancelled)', variant: 'neutral' }
+  cancelled: { label: 'Dibatalkan (cancelled)', variant: 'neutral' },
+  refunded: { label: 'Dana dikembalikan (refunded)', variant: 'neutral' }
 };
 
 function isQrPayment(tx: AulaaTransaction): boolean {
@@ -163,7 +164,7 @@ export const AulaaPaymentBox: React.FC<AulaaPaymentBoxProps> = ({
           <span className="font-semibold text-slate-900">{formatIDR(transaction.feeAmount)}</span>
         </div>
         <div className="flex justify-between pt-1.5 border-t border-slate-200/70">
-          <span className="font-bold text-slate-900">Total Dibayar (total_amount)</span>
+          <span className="font-bold text-slate-900">Total Dibayar (charged_amount)</span>
           <span className="font-extrabold text-[#0B2545]">{formatIDR(transaction.totalAmount)}</span>
         </div>
       </div>
