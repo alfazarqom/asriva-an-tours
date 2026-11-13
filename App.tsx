@@ -343,6 +343,8 @@ export function App() {
                 onChangeLookupRef={app.setLookupRef}
                 lookupContact={app.lookupContact}
                 onChangeLookupContact={app.setLookupContact}
+                lookupAccessToken={app.lookupAccessToken}
+                onChangeLookupAccessToken={app.setLookupAccessToken}
                 lookupError={app.lookupError}
                 onLookupBooking={app.handleLookupBooking}
                 onOpenBookingDetail={app.openBookingDetail}
