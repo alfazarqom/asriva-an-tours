@@ -189,6 +189,8 @@ interface BookingResultRouteProps {
   bookings: Booking[];
   isCheckingAulaaStatus: boolean;
   isCancellingAulaa: boolean;
+  isRetryingAulaaPayment: boolean;
+  onRetryAulaaPayment: (bookingReference: string) => void;
   onRefreshAulaaStatus: (bookingReference: string) => void;
   onBack: () => void;
   onFallbackToBookings: () => void;
@@ -204,6 +206,8 @@ const BookingResultRoute: React.FC<BookingResultRouteProps> = ({
   bookings,
   isCheckingAulaaStatus,
   isCancellingAulaa,
+  isRetryingAulaaPayment,
+  onRetryAulaaPayment,
   onRefreshAulaaStatus,
   onBack,
   onFallbackToBookings,
@@ -222,6 +226,8 @@ const BookingResultRoute: React.FC<BookingResultRouteProps> = ({
         bookings={bookings}
         isCheckingAulaaStatus={isCheckingAulaaStatus}
         isCancellingAulaa={isCancellingAulaa}
+        isRetryingAulaaPayment={isRetryingAulaaPayment}
+        onRetryAulaaPayment={onRetryAulaaPayment}
         onRefreshAulaaStatus={onRefreshAulaaStatus}
         onBack={onBack}
         onFallbackToBookings={onFallbackToBookings}
@@ -457,6 +463,8 @@ export function App() {
               bookings={app.bookings}
               isCheckingAulaaStatus={app.isCheckingAulaaStatus}
               isCancellingAulaa={app.isCancellingAulaa}
+              isRetryingAulaaPayment={app.isRetryingAulaaPayment}
+              onRetryAulaaPayment={app.handleRetryAulaaPayment}
               onRefreshAulaaStatus={app.handleRefreshAulaaStatus}
               onBack={() => app.goBack('/trips')}
               onFallbackToBookings={() => navigate('/trips', { replace: true })}
