@@ -81,8 +81,8 @@ export interface CreateAulaaBookingParams {
 }
 
 export async function createBookingWithAulaa(
-  params: CreateAulaaBookingParams
-): Promise<{ bookingReference: string; transaction: AulaaTransaction | null }> {
+  params: CreateAulaaBookingParams & { optionId: string }
+): Promise<{ bookingReference: string; accessToken: string; transaction: AulaaTransaction | null; paymentError?: { code: string; message: string } }> {
   if (!isSupabaseConfigured() || !supabase) {
     throw new AulaaGatewayException(
       'Konfigurasi Supabase (VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur.',
@@ -103,11 +103,13 @@ export async function createBookingWithAulaa(
 
   return {
     bookingReference: data?.bookingReference || params.booking.bookingReference,
-    transaction: (data?.transaction as AulaaTransaction | null) ?? null
+    accessToken: String(data?.accessToken || ''),
+    transaction: (data?.transaction as AulaaTransaction | null) ?? null,
+    paymentError: data?.paymentError
   };
 }
 
-export async function refreshAulaaPaymentStatus(orderId: string): Promise<AulaaTransaction> {
+export async function refreshAulaaPaymentStatus(orderId: string, accessToken: string): Promise<AulaaTransaction> {
   if (!isSupabaseConfigured() || !supabase) {
     throw new AulaaGatewayException(
       'Konfigurasi Supabase belum diatur.',
@@ -116,7 +118,7 @@ export async function refreshAulaaPaymentStatus(orderId: string): Promise<AulaaT
   }
 
   const { data, error } = await supabase.functions.invoke('aulaa-payment-status', {
-    body: { orderId }
+    body: { orderId, accessToken }
   });
 
   if (error) {
@@ -130,7 +132,8 @@ export async function refreshAulaaPaymentStatus(orderId: string): Promise<AulaaT
 }
 
 export async function cancelAulaaPayment(
-  orderId: string
+  orderId: string,
+  accessToken: string
 ): Promise<{ data: AulaaTransaction | null; bookingCancelled?: boolean }> {
   if (!isSupabaseConfigured() || !supabase) {
     throw new AulaaGatewayException(
@@ -140,7 +143,7 @@ export async function cancelAulaaPayment(
   }
 
   const { data, error } = await supabase.functions.invoke('aulaa-cancel-payment', {
-    body: { orderId }
+    body: { orderId, accessToken }
   });
 
   if (error) {
@@ -155,14 +158,15 @@ export async function cancelAulaaPayment(
 
 export async function lookupBookingInSupabase(
   bookingReference: string,
-  contact: string
+  contact: string,
+  accessToken: string
 ): Promise<Booking | null> {
   if (!isSupabaseConfigured() || !supabase) {
     return null;
   }
 
   const { data, error } = await supabase.functions.invoke('bookings-lookup', {
-    body: { action: 'lookup', bookingReference, contact }
+    body: { action: 'lookup', bookingReference, contact, accessToken }
   });
 
   if (error || data?.error || !data?.booking) {
@@ -174,13 +178,14 @@ export async function lookupBookingInSupabase(
 
 export async function saveBookingReviewInSupabase(
   bookingReference: string,
-  review: BookingReview
+  review: BookingReview,
+  accessToken: string
 ): Promise<void> {
   if (!isSupabaseConfigured() || !supabase) {
     return;
   }
 
   await supabase.functions.invoke('bookings-lookup', {
-    body: { action: 'save_review', bookingReference, review }
+    body: { action: 'save_review', bookingReference, review, accessToken }
   });
 }
