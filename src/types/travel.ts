@@ -212,6 +212,7 @@ export interface Booking {
     | 'Terkonfirmasi - Slot Ditahan'
     | 'Terkonfirmasi - Lunas'
     | 'Kadaluarsa'
+    | 'Pembayaran Gagal'
     | 'Selesai'
     | 'Dibatalkan'
     | 'Dana Dikembalikan';
