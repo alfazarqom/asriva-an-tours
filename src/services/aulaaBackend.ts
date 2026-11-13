@@ -132,6 +132,18 @@ export async function refreshAulaaPaymentStatus(orderId: string, accessToken: st
   return data.data as AulaaTransaction;
 }
 
+export async function retryAulaaPayment(orderId: string, accessToken: string): Promise<AulaaTransaction> {
+  if (!isSupabaseConfigured() || !supabase) {
+    throw new AulaaGatewayException('Konfigurasi Supabase belum diatur.', 'supabase_not_configured');
+  }
+  const { data, error } = await supabase.functions.invoke('aulaa-retry-payment', {
+    body: { orderId, accessToken }
+  });
+  if (error) throw await extractFunctionError(error);
+  if (data?.error?.message) throw new AulaaGatewayException(data.error.message, data.error.code || 'gateway_error', data.error.field);
+  return data.transaction as AulaaTransaction;
+}
+
 export async function cancelAulaaPayment(
   orderId: string,
   accessToken: string
