@@ -7,6 +7,8 @@ create table if not exists public.travel_package_pricing (
   destination text not null,
   duration text not null,
   package_image text not null,
+  meeting_point text not null,
+  departure_location text not null,
   base_price integer not null check (base_price > 0),
   discount_price integer check (discount_price is null or discount_price > 0),
   child_multiplier numeric(6,4) not null check (child_multiplier >= 0 and child_multiplier <= 1),
@@ -19,17 +21,17 @@ create table if not exists public.travel_package_pricing (
 );
 
 insert into public.travel_package_pricing
-(package_id, package_name, destination, duration, package_image, base_price, discount_price, child_multiplier, infant_multiplier, min_travelers, max_travelers, options, departure_dates)
+(package_id, package_name, destination, duration, package_image, meeting_point, departure_location, base_price, discount_price, child_multiplier, infant_multiplier, min_travelers, max_travelers, options, departure_dates)
 values
-('pkg-bali-ubud-4d3n','Bali Ubud & Nusa Penida Signature Escape','Bali & Nusa Penida','4 Hari 3 Malam','https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1000&q=80',5450000,4690000,0.75,0.15,2,12,'[{"id":"opt-4star","name":"Paket Butik Bintang 4 Signature","priceDelta":0},{"id":"opt-5star-villa","name":"Upgrade Vila Kolam Renang Privat","priceDelta":2450000}]','{2026-11-20,2026-11-27,2026-12-04,2026-12-18,2027-01-08}'),
-('pkg-komodo-phinisi-3d2n','Pelayaran Phinisi Komodo & Pulau Padar','Labuan Bajo & Komodo','3 Hari 2 Malam','https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?auto=format&fit=crop&w=1000&q=80',6200000,5590000,0.80,0.10,1,10,'[{"id":"opt-deluxe-cabin","name":"Kabin Ensuite Dek Bawah","priceDelta":0},{"id":"opt-master-ocean","name":"Master Suite Ocean-View Dek Atas","priceDelta":1650000}]','{2026-11-21,2026-11-28,2026-12-05,2026-12-19,2027-01-15}'),
-('pkg-japan-golden-7d6n','Rute Emas Jepang: Tokyo, Gunung Fuji & Kyoto','Tokyo & Kyoto','7 Hari 6 Malam','https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1000&q=80',21800000,19950000,0.85,0.20,2,16,'[{"id":"opt-standard-japan","name":"Hotel Kota Bintang 4 Standar","priceDelta":0},{"id":"opt-premium-japan","name":"Hotel Deluxe Pusat Kota Premier","priceDelta":3800000}]','{2026-12-02,2026-12-16,2027-01-20,2027-03-24}'),
-('pkg-bromo-sewu-3d2n','Ekspedisi Privat Sunrise Bromo & Tumpak Sewu','Bromo & Tumpak Sewu','3 Hari 2 Malam','https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?auto=format&fit=crop&w=1000&q=80',3350000,2890000,0.85,0.10,2,8,'[{"id":"opt-private-standard","name":"Ekspedisi Privat (Penginapan Nyaman)","priceDelta":0},{"id":"opt-private-jiwajawa","name":"Ekspedisi Privat (Resor Jiwa Jawa)","priceDelta":1150000}]','{2026-11-20,2026-11-27,2026-12-11,2026-12-25,2027-01-09}'),
-('pkg-swiss-alpine-6d5n','Kereta Panorama Alpen Swiss: Zurich, Lucerne & Jungfrau','Pegunungan Alpen Swiss & Lucerne','6 Hari 5 Malam','https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&w=1000&q=80',34500000,null,0.70,0.15,2,10,'[{"id":"opt-swiss-2nd","name":"Kereta Swiss Kelas 2 + Hotel Bintang 4","priceDelta":0},{"id":"opt-swiss-1st","name":"Upgrade Kereta Panorama Kelas 1","priceDelta":4900000}]','{2026-12-10,2027-01-14,2027-02-18,2027-05-12}'),
-('pkg-bali-group-corporate-3d2n','Tur Grup Eksplorasi Budaya & Pesisir Bali','Bali & Nusa Penida','3 Hari 2 Malam','https://images.unsplash.com/photo-1555400038-63f5ba517a47?auto=format&fit=crop&w=1000&q=80',2950000,2490000,0.75,0.10,1,25,'[{"id":"opt-group-twin","name":"Kamar Berbagi Twin / Triple","priceDelta":0},{"id":"opt-group-single","name":"Kamar Single (1 Orang / Kamar)","priceDelta":850000}]','{2026-11-22,2026-11-29,2026-12-06,2026-12-20}')
+('pkg-bali-ubud-4d3n','Bali Ubud & Nusa Penida Signature Escape','Bali & Nusa Penida','4 Hari 3 Malam','https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1000&q=80','Pintu Kedatangan Bandara Internasional Ngurah Rai (DPS) / Hotel Bali Selatan','Denpasar, Bali',5450000,4690000,0.75,0.15,2,12,'[{"id":"opt-4star","name":"Paket Butik Bintang 4 Signature","priceDelta":0},{"id":"opt-5star-villa","name":"Upgrade Vila Kolam Renang Privat","priceDelta":2450000}]','{2026-11-20,2026-11-27,2026-12-04,2026-12-18,2027-01-08}'),
+('pkg-komodo-phinisi-3d2n','Pelayaran Phinisi Komodo & Pulau Padar','Labuan Bajo & Komodo','3 Hari 2 Malam','https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?auto=format&fit=crop&w=1000&q=80','Bandara Komodo (LBJ) atau Dermaga Pelabuhan Labuan Bajo','Labuan Bajo, Flores',6200000,5590000,0.80,0.10,1,10,'[{"id":"opt-deluxe-cabin","name":"Kabin Ensuite Dek Bawah","priceDelta":0},{"id":"opt-master-ocean","name":"Master Suite Ocean-View Dek Atas","priceDelta":1650000}]','{2026-11-21,2026-11-28,2026-12-05,2026-12-19,2027-01-15}'),
+('pkg-japan-golden-7d6n','Rute Emas Jepang: Tokyo, Gunung Fuji & Kyoto','Tokyo & Kyoto','7 Hari 6 Malam','https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1000&q=80','Aula Kedatangan Terminal 1 Bandara Internasional Narita (NRT)','Tokyo (NRT) / Kepulangan Osaka (KIX)',21800000,19950000,0.85,0.20,2,16,'[{"id":"opt-standard-japan","name":"Hotel Kota Bintang 4 Standar","priceDelta":0},{"id":"opt-premium-japan","name":"Hotel Deluxe Pusat Kota Premier","priceDelta":3800000}]','{2026-12-02,2026-12-16,2027-01-20,2027-03-24}'),
+('pkg-bromo-sewu-3d2n','Ekspedisi Privat Sunrise Bromo & Tumpak Sewu','Bromo & Tumpak Sewu','3 Hari 2 Malam','https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?auto=format&fit=crop&w=1000&q=80','Bandara Internasional Juanda (SUB) / Stasiun Surabaya Gubeng','Surabaya / Malang, Jawa Timur',3350000,2890000,0.85,0.10,2,8,'[{"id":"opt-private-standard","name":"Ekspedisi Privat (Penginapan Nyaman)","priceDelta":0},{"id":"opt-private-jiwajawa","name":"Ekspedisi Privat (Resor Jiwa Jawa)","priceDelta":1150000}]','{2026-11-20,2026-11-27,2026-12-11,2026-12-25,2027-01-09}'),
+('pkg-swiss-alpine-6d5n','Kereta Panorama Alpen Swiss: Zurich, Lucerne & Jungfrau','Pegunungan Alpen Swiss & Lucerne','6 Hari 5 Malam','https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&w=1000&q=80','Stasiun Kereta Bandara Zurich (ZRH)','Zurich, Swiss',34500000,null,0.70,0.15,2,10,'[{"id":"opt-swiss-2nd","name":"Kereta Swiss Kelas 2 + Hotel Bintang 4","priceDelta":0},{"id":"opt-swiss-1st","name":"Upgrade Kereta Panorama Kelas 1","priceDelta":4900000}]','{2026-12-10,2027-01-14,2027-02-18,2027-05-12}'),
+('pkg-bali-group-corporate-3d2n','Tur Grup Eksplorasi Budaya & Pesisir Bali','Bali & Nusa Penida','3 Hari 2 Malam','https://images.unsplash.com/photo-1555400038-63f5ba517a47?auto=format&fit=crop&w=1000&q=80','Bandara Internasional Ngurah Rai (DPS)','Kuta / Nusa Dua, Bali',2950000,2490000,0.75,0.10,1,25,'[{"id":"opt-group-twin","name":"Kamar Berbagi Twin / Triple","priceDelta":0},{"id":"opt-group-single","name":"Kamar Single (1 Orang / Kamar)","priceDelta":850000}]','{2026-11-22,2026-11-29,2026-12-06,2026-12-20}')
 on conflict (package_id) do update set
  package_name=excluded.package_name, destination=excluded.destination, duration=excluded.duration,
- package_image=excluded.package_image, base_price=excluded.base_price, discount_price=excluded.discount_price,
+ package_image=excluded.package_image, meeting_point=excluded.meeting_point, departure_location=excluded.departure_location, base_price=excluded.base_price, discount_price=excluded.discount_price,
  child_multiplier=excluded.child_multiplier, infant_multiplier=excluded.infant_multiplier,
  min_travelers=excluded.min_travelers, max_travelers=excluded.max_travelers,
  options=excluded.options, departure_dates=excluded.departure_dates, active=true;
@@ -49,7 +51,7 @@ alter table public.aulaa_webhook_events add column if not exists event_fingerpri
 alter table public.aulaa_webhook_events add column if not exists processed_at timestamptz;
 alter table public.aulaa_webhook_events add column if not exists processing_error text;
 create unique index if not exists aulaa_webhook_event_fingerprint_uidx
-  on public.aulaa_webhook_events(event_fingerprint) where event_fingerprint is not null;
+  on public.aulaa_webhook_events(event_fingerprint);
 
 alter table public.travel_package_pricing enable row level security;
 revoke all on public.travel_package_pricing from anon, authenticated;
@@ -164,7 +166,7 @@ begin
     access_token_hash, payment_create_state, idempotency_key
   ) values (
     v_ref, v_pkg.package_id, v_pkg.package_name, v_opt->>'name', v_pkg.destination, v_pkg.duration, v_pkg.package_image,
-    v_guest, v_travelers, v_departure::text, coalesce(p_booking->>'meetingPoint',''), coalesce(p_booking->>'departureLocation',''),
+    v_guest, v_travelers, v_departure::text, v_pkg.meeting_point, v_pkg.departure_location,
     v_adults,v_children,v_infants,v_subtotal,v_discount_total,v_promo_discount,v_promo,v_service_fee,v_total,
     nullif(p_booking->>'specialRequest',''), coalesce(p_booking->>'paymentMethodId','aulaa_all'),
     coalesce(p_booking->>'paymentMethodName','Aulaa'), 'upcoming','Menunggu Pembayaran (Aulaa)',
@@ -240,7 +242,7 @@ declare
   v_currency text := coalesce(p_payload->>'currency','IDR');
   v_country text := coalesce(p_payload->>'country_code','ID');
 begin
-  if v_order is null or v_status not in ('pending','paid','expired','cancelled','failed','refunded') then
+  if v_order is null or v_status is null or p_event_fingerprint is null or v_status not in ('pending','paid','expired','cancelled','failed','refunded') then
     raise exception using errcode='22023',message='invalid_webhook_payload';
   end if;
   insert into public.aulaa_webhook_events(order_id,status,payment_method,amount,payload,event_fingerprint)
