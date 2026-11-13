@@ -11,6 +11,7 @@ import {
   fetchAulaaPaymentMethods,
   lookupBookingInSupabase,
   refreshAulaaPaymentStatus,
+  retryAulaaPayment,
   saveBookingReviewInSupabase
 } from '../services/aulaaBackend';
 import {
@@ -127,6 +128,7 @@ export function useTravelApp() {
   const [aulaaMethodsError, setAulaaMethodsError] = useState<string>('');
   const [isCheckingAulaaStatus, setIsCheckingAulaaStatus] = useState<boolean>(false);
   const [isCancellingAulaa, setIsCancellingAulaa] = useState<boolean>(false);
+  const [isRetryingAulaaPayment, setIsRetryingAulaaPayment] = useState<boolean>(false);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
@@ -784,6 +786,34 @@ export function useTravelApp() {
     [bookings, isCheckingAulaaStatus, showToast]
   );
 
+  const handleRetryAulaaPayment = useCallback(
+    async (bookingReference: string) => {
+      if (isRetryingAulaaPayment) return;
+      const target = bookings.find((b) => b.bookingReference === bookingReference);
+      if (!target?.accessToken) {
+        showToast('Token akses booking diperlukan untuk memulihkan invoice.', 'error');
+        return;
+      }
+      setIsRetryingAulaaPayment(true);
+      try {
+        const tx = await retryAulaaPayment(bookingReference, target.accessToken);
+        setBookings((prev) => prev.map((b) => b.bookingReference === bookingReference ? {
+          ...b,
+          aulaaTransaction: tx,
+          bookingStatus: tx.status === 'paid' ? 'Terkonfirmasi - Lunas' : tx.status === 'refunded' ? 'Dana Dikembalikan' : 'Menunggu Pembayaran (Aulaa)',
+          paymentStatus: tx.status === 'paid' ? 'Lunas (Terverifikasi)' : tx.status === 'refunded' ? 'Dana Dikembalikan' : 'Belum Dibayar - Menunggu Pembayaran',
+          tripCategory: tx.status === 'refunded' || tx.status === 'expired' || tx.status === 'cancelled' ? 'cancelled' : b.tripCategory
+        } : b));
+        showToast('Invoice Aulaa berhasil dipulihkan.', 'success');
+      } catch (err) {
+        showToast(err instanceof AulaaGatewayException ? err.message : 'Invoice belum dapat dipulihkan.', 'error');
+      } finally {
+        setIsRetryingAulaaPayment(false);
+      }
+    },
+    [bookings, isRetryingAulaaPayment, showToast]
+  );
+
   const handleCancelBooking = useCallback(
     async (bookingReference: string) => {
       const target = bookings.find((b) => b.bookingReference === bookingReference);
@@ -975,6 +1005,8 @@ export function useTravelApp() {
     loadAulaaMethods,
     isCheckingAulaaStatus,
     isCancellingAulaa,
+    isRetryingAulaaPayment,
+    handleRetryAulaaPayment,
     handleRefreshAulaaStatus,
     agreedTerms,
     setAgreedTerms,
