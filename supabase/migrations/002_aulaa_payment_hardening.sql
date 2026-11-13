@@ -200,14 +200,20 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare v_booking public.bookings%rowtype;
+  v_existing_payment_id uuid;
 begin
   select * into v_booking from public.bookings where booking_reference=p_order_id for update;
   if not found then raise exception using errcode='P0002', message='booking_not_found'; end if;
   if (p_payment->>'order_id') is distinct from p_order_id
     or (p_payment->>'amount')::int is distinct from v_booking.total_amount
     or coalesce(p_payment->>'currency','IDR') <> 'IDR'
-    or coalesce(p_payment->>'country_code','ID') <> 'ID' then
+    or coalesce(p_payment->>'country_code','ID') <> 'ID'
+    or coalesce(p_payment->>'status','pending') not in ('pending','paid','expired','cancelled','failed','refunded') then
     raise exception using errcode='22023', message='aulaa_payment_mismatch';
+  end if;
+  select id into v_existing_payment_id from public.aulaa_transactions where order_id=p_order_id for update;
+  if v_existing_payment_id is not null and v_existing_payment_id <> (p_payment->>'id')::uuid then
+    raise exception using errcode='22023', message='aulaa_payment_id_mismatch';
   end if;
   insert into public.aulaa_transactions (
     id,order_id,status,payment_method,payment_method_name,payment_method_type,
