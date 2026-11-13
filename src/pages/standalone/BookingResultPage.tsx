@@ -100,6 +100,20 @@ export const BookingResultPage: React.FC<BookingResultPageProps> = ({
               Salin
             </button>
           </div>
+          {booking.accessToken ? (
+            <div className="mt-3 p-3 rounded-xl border border-amber-200 bg-amber-50 text-left">
+              <div className="text-[10px] uppercase font-bold text-amber-800">Token Akses Privat</div>
+              <p className="text-[11px] text-amber-900 mt-1">Simpan token ini sekarang. Token tidak disimpan sebagai teks di server dan tidak akan ditampilkan kembali setelah sesi ini berakhir.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="min-w-0 flex-1 break-all text-[10px] text-slate-800">{booking.accessToken}</code>
+                <button type="button" onClick={() => { navigator.clipboard?.writeText(booking.accessToken!); onShowToast('Token akses berhasil disalin. Simpan di tempat aman.', 'success'); }} className="shrink-0 px-2.5 py-2 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-900 inline-flex items-center gap-1">
+                  <Copy className="w-3.5 h-3.5" /> Salin
+                </button>
+              </div>
+            </div>
+          ) : isConfirmationScreen ? (
+            <p className="mt-3 text-[11px] text-amber-700">Token akses tidak tersedia pada sesi ini. Jika Anda belum menyimpannya, gunakan proses bantuan pemulihan booking.</p>
+          ) : null}
         </div>
 
         <BookingProgressTracker
