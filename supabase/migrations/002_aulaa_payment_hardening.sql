@@ -283,10 +283,11 @@ begin
   if v_amount <> v_tx.amount or v_currency <> v_tx.currency or v_country <> v_tx.country_code then
     raise exception using errcode='22023',message='payment_amount_or_currency_mismatch';
   end if;
-  if v_status='pending' and v_tx.status <> 'pending'
-    or v_status='refunded' and v_tx.status <> 'paid'
-    or v_tx.status='refunded' and v_status <> 'refunded'
-    or v_tx.status='paid' and v_status in ('pending','failed','expired','cancelled') then
+  if (v_status='pending' and v_tx.status <> 'pending')
+    or (v_status='refunded' and v_tx.status <> 'paid')
+    or (v_tx.status='refunded' and v_status <> 'refunded')
+    or (v_tx.status='paid' and v_status not in ('paid','refunded'))
+    or (v_tx.status in ('expired','cancelled','failed') and v_status not in (v_tx.status,'paid')) then
     update public.aulaa_webhook_events set processing_error='stale_or_invalid_transition',processed_at=now() where id=v_event_id;
     return jsonb_build_object('ignored',true,'reason','stale_or_invalid_transition');
   end if;
