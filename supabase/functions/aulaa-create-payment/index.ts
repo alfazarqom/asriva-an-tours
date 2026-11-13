@@ -51,6 +51,12 @@ Deno.serve(async (req: Request) => {
     if (!booking || !bookingReference || !optionId || !booking.guest || !Array.isArray(booking.travelers)) {
       return jsonResponse({ error: { code: 'invalid_request', message: 'Data checkout tidak lengkap.' } }, 400);
     }
+    const paymentMethodId = String(booking.paymentMethodId || '');
+    const isAulaaMethod = paymentMethodId === 'aulaa_all' || paymentMethodId === 'aulaa_direct';
+    if ((isAulaaMethod && !aulaa) || (!isAulaaMethod && aulaa) ||
+      (paymentMethodId === 'aulaa_direct' && typeof aulaa?.paymentMethod !== 'string')) {
+      return jsonResponse({ error: { code: 'invalid_payment_method', message: 'Konfigurasi metode pembayaran tidak sesuai.' } }, 400);
+    }
 
     const accessToken = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
     const accessTokenHash = await sha256(accessToken);
